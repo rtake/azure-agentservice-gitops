@@ -25,6 +25,7 @@ var resourceToken = take(toLower(uniqueString(subscription().id, location)), 6)
 var storageName = 'st${resourceToken}'
 var planName = 'plan-${resourceToken}'
 var functionName = 'func-${resourceToken}'
+var appInsightsName = 'appi-${resourceToken}'
 
 resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: storageName
@@ -36,6 +37,15 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   properties: {
     minimumTlsVersion: 'TLS1_2'
     allowBlobPublicAccess: false
+  }
+}
+
+resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: appInsightsName
+  location: location
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
   }
 }
 
@@ -74,7 +84,10 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
       FUNCTIONS_WORKER_RUNTIME: runtime
       FUNCTIONS_EXTENSION_VERSION: '~4'
 
-      // GitHub info for workflow trigger
+      // Application Insights
+      APPLICATIONINSIGHTS_CONNECTION_STRING: appInsights.properties.ConnectionString
+
+      // GitHub info
       GITHUB_OWNER: githubOwner
       GITHUB_REPO: githubRepo
       GITHUB_TOKEN: githubToken
