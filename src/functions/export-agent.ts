@@ -11,17 +11,23 @@ import { triggerGitHubWorkflow } from "../github-actions/trigger-workflow";
 
 const AGENT_DEPLOYMENTS_OPERATION_NAME =
   "Microsoft.CognitiveServices/accounts/projects/applications/agentdeployments/write";
+
 const AGENT_DEPLOYMENTS_MESSAGE =
   "Microsoft.CognitiveServices/accounts/projects/applications/agentdeployments/write";
 
 const NO_RELEVANT_OPERATION_MESSAGE = "Not relevant operation";
 
-module.exports = async function (context, req) {
-  console.log("Received request:", req);
+export async function triggerWorkflow(
+  req: HttpRequest,
+  context: InvocationContext,
+): Promise<HttpResponseInit> {
+  context.log("Received request: %o", req);
 
+  const body = (await req.json()) as any;
   const {
     data: { alertContext },
-  } = JSON.parse(req.rawBody);
+  } = body;
+  context.log("Alert context: %o", alertContext);
 
   const {
     operationName,
@@ -29,19 +35,17 @@ module.exports = async function (context, req) {
   } = alertContext;
 
   if (operationName !== AGENT_DEPLOYMENTS_OPERATION_NAME) {
-    context.res = {
+    return {
       status: 200,
       body: NO_RELEVANT_OPERATION_MESSAGE,
     };
-    return;
   }
 
   if (message !== AGENT_DEPLOYMENTS_MESSAGE) {
-    context.res = {
+    return {
       status: 200,
       body: NO_RELEVANT_OPERATION_MESSAGE,
     };
-    return;
   }
 
   try {
@@ -64,6 +68,7 @@ module.exports = async function (context, req) {
       appName,
       deploymentName,
     });
+    context.log("agentName: %o", agentName);
 
     const agentDefinition = await fetchAgentDefinition({
       credential,
@@ -71,26 +76,30 @@ module.exports = async function (context, req) {
       projectName,
       agentName,
     });
+    context.log("agentDefinition: %o", agentDefinition);
 
-    await triggerGitHubWorkflow(agentDefinition, deploymentName);
+    const triggerResult = await triggerGitHubWorkflow(
+      agentDefinition,
+      deploymentName,
+    );
+    context.log("GitHub workflow trigger result: %o", triggerResult);
   } catch (err) {
-    console.error("Error triggering GitHub workflow:", err);
+    context.error("Error triggering GitHub workflow:", err);
 
-    context.res = {
+    return {
       status: 500,
       body: "Error triggering GitHub workflow",
     };
-    return;
   }
 
-  context.res = {
+  return {
     status: 200,
     body: "Workflow triggered",
   };
-};
+}
 
-app.http("trigger-workflow", {
+app.http("export-agent", {
   methods: ["POST"],
   authLevel: "function",
-  handler: module.exports,
+  handler: triggerWorkflow,
 });

@@ -36,7 +36,6 @@ export const fetchAgentName = async ({
   });
   const deployment = await deploymentRes.json();
   const { agentName } = deployment.properties.agents[0];
-  console.log("agentName:", agentName);
 
   return agentName;
 };

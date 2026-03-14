@@ -3,10 +3,13 @@ const GITHUB_OWNER = process.env.GITHUB_OWNER;
 const GITHUB_REPO = process.env.GITHUB_REPO;
 const WORKFLOW_FILE = "agent-pr.yml";
 
-export async function triggerGitHubWorkflow(agentDefinition, deploymentName) {
+export async function triggerGitHubWorkflow(
+  agentDefinition,
+  deploymentName,
+): Promise<Response> {
   const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`;
 
-  await fetch(url, {
+  const res = await fetch(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${GITHUB_TOKEN}`,
@@ -21,4 +24,6 @@ export async function triggerGitHubWorkflow(agentDefinition, deploymentName) {
       },
     }),
   });
+
+  return res;
 }

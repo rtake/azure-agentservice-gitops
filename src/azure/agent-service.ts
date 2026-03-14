@@ -30,7 +30,6 @@ export const fetchAgentDefinition = async ({
       latest: { definition: agentDefinition },
     },
   } = await agentRes.json();
-  console.log("agentDefinition:", agentDefinition);
 
   return agentDefinition;
 };
