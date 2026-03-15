@@ -3,6 +3,15 @@ name: agent-pr
 on:
   workflow_dispatch:
     inputs:
+      account_name:
+        required: true
+        type: string
+      project_name:
+        required: true
+        type: string
+      app_name:
+        required: true
+        type: string
       deployment_name:
         required: true
         type: string
@@ -22,11 +31,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - run: |
-          BRANCH=agent-${{ github.event.inputs.deployment_name }}-${{ github.run_id }}
+          BRANCH=feature/${{ github.event.inputs.app_name }}/${{ github.event.inputs.deployment_name }}-${{ github.run_id }}
           git checkout -b $BRANCH
 
-          mkdir -p agents
-          echo '${{ github.event.inputs.agent_definition }}' > agents/${{ github.event.inputs.deployment_name }}.json
+          DIRECTORY=agents/${{ github.event.inputs.account_name }}/${{ github.event.inputs.project_name}}
+
+          mkdir -p $DIRECTORY
+          echo '${{ github.event.inputs.agent_definition }}' > $DIRECTORY/${{ github.event.inputs.app_name }}.json
 
           git config user.name bot
           git config user.email bot@users.noreply.github.com
@@ -37,7 +48,7 @@ jobs:
 
       - run: |
           gh pr create \
-            --title "Agent ${{ github.event.inputs.deployment_name }}" \
-            --body "Auto generated"
+            --title "Update agent ${{ github.event.inputs.app_name }}" \
+            --body "Deployment: ${{ github.event.inputs.deployment_name }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

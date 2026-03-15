@@ -10,10 +10,19 @@ const GITHUB_OWNER = process.env.GITHUB_OWNER;
 const GITHUB_REPO = process.env.GITHUB_REPO;
 const WORKFLOW_FILE = "agent-pr.yml";
 
-export async function triggerGitHubWorkflow(
-  agentDefinition: string,
-  deploymentName: string,
-): Promise<Response> {
+export async function triggerGitHubWorkflow({
+  accountName,
+  projectName,
+  appName,
+  deploymentName,
+  agentDefinition,
+}: {
+  accountName: string;
+  projectName: string;
+  appName: string;
+  deploymentName: string;
+  agentDefinition: string;
+}): Promise<Response> {
   const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`;
 
   const res = await fetch(url, {
@@ -26,6 +35,9 @@ export async function triggerGitHubWorkflow(
     body: JSON.stringify({
       ref: "main",
       inputs: {
+        account_name: accountName,
+        project_name: projectName,
+        app_name: appName,
         deployment_name: deploymentName,
         agent_definition: JSON.stringify(agentDefinition),
       },
@@ -53,10 +65,13 @@ async function uploadAgentToGitHub(
   context.log("agentDefinition: %o", agentDefinition);
   context.log("deploymentName: %o", deploymentName);
 
-  const triggerResult = await triggerGitHubWorkflow(
-    agentDefinition,
-    deploymentName,
-  );
+  const triggerResult = await triggerGitHubWorkflow({
+    accountName: body.accountName,
+    projectName: body.projectName,
+    appName: body.appName,
+    deploymentName: body.deploymentName,
+    agentDefinition: body.agentDefinition,
+  });
   context.log("GitHub workflow trigger result: %o", triggerResult);
 
   return {
