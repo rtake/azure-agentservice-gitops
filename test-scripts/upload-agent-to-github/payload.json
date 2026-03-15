@@ -1,0 +1,13 @@
+{
+  "agentDefinition": {
+    "kind": "prompt",
+    "model": "gpt-4.1",
+    "instructions": "ローカルからのテスト用エージェント定義",
+    "tools": [
+      {
+        "type": "web_search_preview"
+      }
+    ]
+  },
+  "deploymentName": "test"
+}
