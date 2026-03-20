@@ -5,6 +5,7 @@ import {
   InvocationContext,
   output,
 } from "@azure/functions";
+import { AgentDeploymentData } from "../azure/management";
 
 const AGENT_DEPLOYMENTS_OPERATION_NAME =
   "Microsoft.CognitiveServices/accounts/projects/applications/agentdeployments/write";
@@ -67,7 +68,16 @@ export async function detectAgentPublish(
     deploymentName,
   );
 
-  context.extraOutputs.set(queueOutput, entity);
+  const agentData: AgentDeploymentData = {
+    subscriptionId,
+    resourceGroup,
+    accountName,
+    projectName,
+    appName,
+    deploymentName,
+  };
+
+  context.extraOutputs.set(queueOutput, agentData);
   context.log("Sent message to queue %o", QUEUE_NAME);
 
   return {

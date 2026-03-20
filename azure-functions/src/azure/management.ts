@@ -3,26 +3,34 @@ import { DefaultAzureCredential } from "@azure/identity";
 
 const SCOPE = "https://management.azure.com/.default";
 
-export const fetchAgentName = async ({
-  credential,
-  subscriptionId,
-  resourceGroup,
-  accountName,
-  projectName,
-  appName,
-  deploymentName,
-  context,
-}: {
-  credential: DefaultAzureCredential;
+export interface AgentDeploymentData {
   subscriptionId: string;
   resourceGroup: string;
   accountName: string;
   projectName: string;
   appName: string;
   deploymentName: string;
+}
+
+export const fetchAgentName = async ({
+  credential,
+  agentDeploymentData,
+  context,
+}: {
+  credential: DefaultAzureCredential;
+  agentDeploymentData: AgentDeploymentData;
   context: InvocationContext;
 }): Promise<string> => {
   const token = await credential.getToken(SCOPE);
+
+  const {
+    subscriptionId,
+    resourceGroup,
+    accountName,
+    projectName,
+    appName,
+    deploymentName,
+  } = agentDeploymentData;
 
   const url =
     `https://management.azure.com/subscriptions/${subscriptionId}` +
