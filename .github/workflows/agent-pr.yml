@@ -30,14 +30,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - run: |
+      - name: Create branch and write file
+        run: |
+          set -e
+
           BRANCH=feature/${{ github.event.inputs.app_name }}/${{ github.event.inputs.deployment_name }}-${{ github.run_id }}
-          git checkout -b $BRANCH
+          git checkout -b "$BRANCH"
 
-          DIRECTORY=agents/${{ github.event.inputs.account_name }}/${{ github.event.inputs.project_name}}
+          DIRECTORY=agents/${{ github.event.inputs.account_name }}/${{ github.event.inputs.project_name }}
+          mkdir -p "$DIRECTORY"
 
-          mkdir -p $DIRECTORY
-          echo '${{ github.event.inputs.agent_definition }}' > $DIRECTORY/${{ github.event.inputs.app_name }}.json
+          FILE="$DIRECTORY/${{ github.event.inputs.app_name }}.json"
+
+          # JSONを安全にパース＆整形して保存
+          printf '%s' "${{ github.event.inputs.agent_definition }}" \
+            | jq . \
+            > "$FILE"
 
           git config user.name bot
           git config user.email bot@users.noreply.github.com
@@ -46,7 +54,8 @@ jobs:
           git commit -m "Add agent"
           git push origin HEAD
 
-      - run: |
+      - name: Create PR
+        run: |
           gh pr create \
             --title "Update agent ${{ github.event.inputs.app_name }}" \
             --body "Deployment: ${{ github.event.inputs.deployment_name }}"
