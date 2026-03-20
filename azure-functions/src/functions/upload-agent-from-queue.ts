@@ -1,9 +1,7 @@
 import { app, InvocationContext, HttpResponseInit } from "@azure/functions";
 import { AgentDeploymentData } from "../azure/management";
 import { uploadAgentToGitHub } from "../github-actions/trigger-workflow";
-
-const QUEUE_NAME = "queue-agentdeploy";
-const QUEUE_CONNECTION_STRING = "QUEUE_CONNECTION_STRING";
+import { QUEUE_CONNECTION_STRING, QUEUE_NAME } from "../azure/queue";
 
 export async function uploadAgentToGitHubFromQueue(
   agentDeploymentData: AgentDeploymentData,

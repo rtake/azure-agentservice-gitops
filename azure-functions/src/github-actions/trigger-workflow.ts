@@ -21,7 +21,7 @@ export async function uploadAgentToGitHub(
     context: context,
     agentDeploymentData,
   });
-  context.log("agentName: %o", agentName);
+  // context.log("agentName: %o", agentName);
 
   const agentDefinition = await fetchAgentDefinition({
     credential,
@@ -36,8 +36,8 @@ export async function uploadAgentToGitHub(
       body: "Missing agentDefinition or deploymentName in request body",
     };
   }
-  context.log("agentDefinition: %o", agentDefinition);
-  context.log("deploymentName: %o", agentDeploymentData.deploymentName);
+  // context.log("agentDefinition: %o", agentDefinition);
+  // context.log("deploymentName: %o", agentDeploymentData.deploymentName);
 
   const triggerWorkflowResult = await triggerGitHubWorkflow({
     accountName: agentDeploymentData.accountName,

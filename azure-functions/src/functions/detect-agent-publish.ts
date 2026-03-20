@@ -6,14 +6,12 @@ import {
   output,
 } from "@azure/functions";
 import { AgentDeploymentData } from "../azure/management";
+import { QUEUE_CONNECTION_STRING, QUEUE_NAME } from "../azure/queue";
 
 const AGENT_DEPLOYMENTS_OPERATION_NAME =
   "Microsoft.CognitiveServices/accounts/projects/applications/agentdeployments/write";
 const AGENT_DEPLOYMENTS_MESSAGE =
   "Microsoft.CognitiveServices/accounts/projects/applications/agentdeployments/write";
-
-const QUEUE_NAME = "queue-agentdeploy";
-const QUEUE_CONNECTION_STRING = "QUEUE_CONNECTION_STRING";
 
 const queueOutput = output.storageQueue({
   queueName: QUEUE_NAME,
@@ -28,7 +26,7 @@ export async function detectAgentPublish(
   const {
     data: { alertContext },
   } = body;
-  context.log("Alert context: %o", alertContext);
+  // context.log("Alert context: %o", alertContext);
 
   const {
     operationName,
@@ -78,10 +76,10 @@ export async function detectAgentPublish(
   };
 
   context.extraOutputs.set(queueOutput, agentData);
-  context.log("Sent message to queue %o", QUEUE_NAME);
+  // context.log("Sent message to queue %o", QUEUE_NAME);
 
   return {
-    status: 200,
+    status: 202,
     body: `Agent published at ${accountName}/${projectName}`,
   };
 }
