@@ -62,6 +62,47 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   }
 }
 
+resource actionGroup 'Microsoft.Insights/actionGroups@2021-09-01' = {
+  name: 'ag-${resourceToken}'
+  location: 'global'
+  properties: {
+    groupShortName: 'ag'
+    enabled: true
+  }
+}
+
+resource alertRule 'microsoft.insights/activityLogAlerts@2017-04-01' = {
+  name: 'alert-${resourceToken}'
+  location: 'global'
+  properties: {
+    description: 'Alert for function failures'
+    enabled: true
+    scopes: [
+      subscription().id
+    ]
+    condition: {
+      allOf: [
+        {
+          field: 'category'
+          equals: 'Administrative'
+        }
+        {
+          field: 'resourceType'
+          equals: 'Microsoft.CognitiveServices'
+        }
+      ]
+    }
+    actions: {
+      actionGroups: [
+        {
+          actionGroupId: actionGroup.id
+          // webhookProperties: {}
+        }
+      ]
+    }
+  }
+}
+
 resource plan 'Microsoft.Web/serverfarms@2024-04-01' = {
   name: planName
   location: location
