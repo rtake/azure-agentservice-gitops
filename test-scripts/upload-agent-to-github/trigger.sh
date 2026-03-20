@@ -12,15 +12,20 @@ payload=$(jq -n \
   --arg appName "$APP_NAME" \
   --arg deploymentName "$DEPLOYMENT_NAME" \
   '{
-    subscriptionId: $subscriptionId,
-    resourceGroup: $resourceGroup,
-    accountName: $accountName,
-    projectName: $projectName,
-    appName: $appName,
-    deploymentName: $deploymentName
-  }')
+    data: {
+      alertContext: {
+        operationName: "Microsoft.CognitiveServices/accounts/projects/applications/agentdeployments/write",
+        properties: {
+          entity: "/subscriptions/\($subscriptionId)/resourceGroups/\($resourceGroup)/providers/Microsoft.CognitiveServices/accounts/\($accountName)/projects/\($projectName)/applications/\($appName)/agentDeployments/\($deploymentName)",
+          message: "Microsoft.CognitiveServices/accounts/projects/applications/agentdeployments/write"
+        }
+      }
+    }
+  }' \
+)
 
-curl -X POST "$FUNCTION_URL" \
+response=$(curl -s -X POST "$FUNCTION_URL" \
   -H "Content-Type: application/json" \
   -H "x-functions-key: $FUNCTION_KEY" \
-  -d "$payload"
+  -d "$payload")
+echo "Response from Azure Function: $response"

@@ -3,13 +3,21 @@ import {
   HttpRequest,
   HttpResponseInit,
   InvocationContext,
+  output,
 } from "@azure/functions";
 
 const AGENT_DEPLOYMENTS_OPERATION_NAME =
   "Microsoft.CognitiveServices/accounts/projects/applications/agentdeployments/write";
-
 const AGENT_DEPLOYMENTS_MESSAGE =
   "Microsoft.CognitiveServices/accounts/projects/applications/agentdeployments/write";
+
+const QUEUE_NAME = "queue-agentdeploy";
+const QUEUE_CONNECTION_STRING = "QUEUE_CONNECTION_STRING";
+
+const queueOutput = output.storageQueue({
+  queueName: QUEUE_NAME,
+  connection: QUEUE_CONNECTION_STRING,
+});
 
 export async function detectAgentPublish(
   req: HttpRequest,
@@ -59,6 +67,9 @@ export async function detectAgentPublish(
     deploymentName,
   );
 
+  context.extraOutputs.set(queueOutput, entity);
+  context.log("Sent message to queue %o", QUEUE_NAME);
+
   return {
     status: 200,
     body: `Agent published at ${accountName}/${projectName}`,
@@ -68,5 +79,6 @@ export async function detectAgentPublish(
 app.http("detect-agent-publish", {
   methods: ["POST"],
   authLevel: "function",
+  extraOutputs: [queueOutput],
   handler: detectAgentPublish,
 });
