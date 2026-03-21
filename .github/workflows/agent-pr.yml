@@ -35,6 +35,8 @@ jobs:
         run: |
           echo "===== RAW INPUT (START) ====="
           echo "${{github.event.inputs.agent_definition}}"
+          printf '%s' "${{ github.event.inputs.agent_definition }} "
+          echo "${{github.event.inputs.agent_definition}}" | base64 --decode
           printf '%s' "${{ github.event.inputs.agent_definition }} " | base64 --decode
           echo "===== RAW INPUT (END) ====="
 
