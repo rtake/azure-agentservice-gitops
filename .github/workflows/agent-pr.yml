@@ -33,7 +33,8 @@ jobs:
       - name: Debug input
         run: |
           echo "===== RAW INPUT (START) ====="
-          printf '%s\n' "${{ github.event.inputs.agent_definition }}"
+          echo ${{ fromJson(github.event.inputs.agent_definition)}}
+          printf '%s' "${{ github.event.inputs.agent_definition }}"
           echo "===== RAW INPUT (END) ====="
 
           echo "===== LENGTH ====="
