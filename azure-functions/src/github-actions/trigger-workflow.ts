@@ -36,7 +36,7 @@ export async function uploadAgentToGitHub(
       body: "Missing agentDefinition or deploymentName in request body",
     };
   }
-  // context.log("agentDefinition: %o", agentDefinition);
+  context.log("agentDefinition: %o", agentDefinition);
   // context.log("deploymentName: %o", agentDeploymentData.deploymentName);
 
   const triggerWorkflowResult = await triggerGitHubWorkflow({
@@ -45,6 +45,7 @@ export async function uploadAgentToGitHub(
     appName: agentDeploymentData.appName,
     deploymentName: agentDeploymentData.deploymentName,
     agentDefinition: agentDefinition,
+    context,
   });
   context.log("GitHub workflow trigger result: %o", triggerWorkflowResult);
 
@@ -60,14 +61,36 @@ export async function triggerGitHubWorkflow({
   appName,
   deploymentName,
   agentDefinition,
+  context,
 }: {
   accountName: string;
   projectName: string;
   appName: string;
   deploymentName: string;
-  agentDefinition: string;
+  agentDefinition: object;
+  context: InvocationContext;
 }): Promise<Response> {
   const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`;
+
+  const agentDefitionBase64 = Buffer.from(
+    JSON.stringify(agentDefinition),
+  ).toString("base64");
+  context.log("agentDefitionBase64: %o", agentDefitionBase64);
+
+  const body = {
+    ref: "main",
+    inputs: {
+      account_name: accountName,
+      project_name: projectName,
+      app_name: appName,
+      deployment_name: deploymentName,
+      agent_definition: agentDefitionBase64,
+    },
+  };
+  context.log("Triggering GitHub workflow with body: %o", body);
+
+  const bodyJson = JSON.stringify(body);
+  context.log("Triggering GitHub workflow with body JSON: %o", bodyJson);
 
   const res = await fetch(url, {
     method: "POST",
@@ -76,17 +99,10 @@ export async function triggerGitHubWorkflow({
       Accept: "application/vnd.github+json",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      ref: "main",
-      inputs: {
-        account_name: accountName,
-        project_name: projectName,
-        app_name: appName,
-        deployment_name: deploymentName,
-        agent_definition: JSON.stringify(agentDefinition),
-      },
-    }),
+    body: bodyJson,
   });
+
+  context.log("res.text(): ", await res.text());
 
   return res;
 }

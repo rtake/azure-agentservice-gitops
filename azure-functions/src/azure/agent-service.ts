@@ -12,7 +12,7 @@ export const fetchAgentDefinition = async ({
   accountName: string;
   projectName: string;
   agentName: string;
-}): Promise<any> => {
+}): Promise<object> => {
   const token = await credential.getToken(SCOPE);
 
   const domain = `${accountName}.services.ai.azure.com`;

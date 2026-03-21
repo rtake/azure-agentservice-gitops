@@ -18,6 +18,7 @@ on:
       agent_definition:
         required: true
         type: string
+        description: "Base64-encoded JSON string of the agent definition"
 
 permissions:
   contents: write
@@ -33,17 +34,16 @@ jobs:
       - name: Debug input
         run: |
           echo "===== RAW INPUT (START) ====="
-          echo ${{ fromJson(github.event.inputs.agent_definition)}}
-          printf '%s' "${{ github.event.inputs.agent_definition }}"
+          printf '%s' "${{ github.event.inputs.agent_definition }} " | base64 --decode
           echo "===== RAW INPUT (END) ====="
 
           echo "===== LENGTH ====="
-          printf '%s' "${{ github.event.inputs.agent_definition }}" | wc -c
+          printf '%s' "${{ github.event.inputs.agent_definition }}" | base64 --decode | wc -c
 
       - name: Validate JSON
         run: |
           set +e
-          printf '%s' "${{ github.event.inputs.agent_definition }}" | jq . > /dev/null
+          printf '%s' "${{ github.event.inputs.agent_definition }}" | base64 --decode | jq . > /dev/null
           STATUS=$?
           if [ $STATUS -ne 0 ]; then
             echo "❌ Invalid JSON detected"
