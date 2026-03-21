@@ -30,27 +30,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Debug input
-        run: |
-          echo "===== RAW INPUT (START) ====="
-          echo "${{github.event.inputs.agent_definition}}"
-          echo "${{github.event.inputs.agent_definition}}" | base64 --decode
-          echo "${{github.event.inputs.agent_definition}}" | base64 --decode | jq .          
-          echo "===== RAW INPUT (END) ====="
-
-      - name: Validate JSON
-        run: |
-          set +e
-          printf '%s' "${{ github.event.inputs.agent_definition }}" | base64 --decode | jq . > /dev/null
-          STATUS=$?
-          if [ $STATUS -ne 0 ]; then
-            echo "❌ Invalid JSON detected"
-            exit 1
-          else
-            echo "✅ JSON is valid"
-          fi
-
       - name: Create branch and write file
         run: |
           set -e
