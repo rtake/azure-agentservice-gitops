@@ -193,8 +193,20 @@ GitHub上でワークフローが起動し、PR作成が確認できたら成功
 - 開発環境での変更はPull Requestとして可視化し、レビュー・マージを経たものだけが本番環境に反映されるようにすることで、GitOpsとしての統制を担保しました
 - 本番環境への反映はmainへのマージをトリガーとして実行し、Gitの状態と本番環境の状態を一致させる構成にしています
 
-## 今後の改善ポイント
+## 今後の改善点
+
+### 優先度高
+
+- ワークフローからデプロイしたエージェントをFoundryポータルから開くと、変更内容がない時にも「保存してください」というメッセージが出る
+- エージェント未作成の場合に作成できるようワークフローを修正する
+
+### 優先度中
+
+- サービスプリンシパルをIaC(Bicep)に追加する
+- Azure Functionsの環境変数の値をKey Vault等から安全に参照できるようにする(現在の構成ではデプロイのたびに更新が必要になってしまう)
+- 本番デプロイ先を明示できるようにする(現在の構成では `AIFOUNDRY_PROJECT_ENDPOINT` からしか参照できない)
+
+### 優先度低
 
 - Parse Log Functionの呼び出し元をSecure webhookに限定し、アクショングループからのみ呼び出せるようにする ([セキュア Webhook アクション グループを作成する](https://learn.microsoft.com/ja-jp/azure/azure-monitor/alerts/itsm-connector-secure-webhook-connections-azure-configuration#create-a-secure-webhook-action-group))
 - ネットワーク閉域化
-- サービスプリンシパルをIaC(Bicep)に追加する

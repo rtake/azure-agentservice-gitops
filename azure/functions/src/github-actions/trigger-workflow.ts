@@ -6,7 +6,7 @@ import { fetchAgentDefinition } from "../azure/agent-service";
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const GITHUB_OWNER = process.env.GITHUB_OWNER;
 const GITHUB_REPO = process.env.GITHUB_REPO;
-const WORKFLOW_FILE = "agent-pr.yml";
+const WORKFLOW_FILE = "agent-pr.yaml";
 
 export async function uploadAgentToGitHub(
   agentDeploymentData: AgentDeploymentData,
