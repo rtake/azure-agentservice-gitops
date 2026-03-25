@@ -74,7 +74,6 @@ jobs:
             [ -z "$f" ] && continue
 
             AGENT_NAME=$(basename "$f" .json)
-            echo "Processing ${PROJECT_NAME}/${AGENT_NAME}"
 
             GET_URL="${BASE_URL}/api/projects/${PROJECT_NAME}/agents/${AGENT_NAME}?api-version=v1"
             CREATE_URL="${BASE_URL}/api/projects/${PROJECT_NAME}/agents?api-version=v1"
@@ -128,6 +127,7 @@ jobs:
 
             AGENT_ID=$(jq -r '.id' "$AGENT_JSON")
             AGENT_VERSION=$(jq -r '.versions.latest.version' "$AGENT_JSON")
+            echo "Resolved agent id: $AGENT_ID, version: $AGENT_VERSION"
 
             if [ -z "$AGENT_ID" ] || [ "$AGENT_ID" = "null" ] || [ -z "$AGENT_VERSION" ] || [ "$AGENT_VERSION" = "null" ]; then
               echo "Failed to resolve agent id/version for ${AGENT_NAME}"
