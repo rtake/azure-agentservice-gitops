@@ -10,7 +10,8 @@ permissions:
   contents: read
 
 env:
-  PROJECT_ENDPOINT: ${{ secrets.AIFOUNDRY_PROJECT_ENDPOINT }}
+  AIFOUNDRY_ACCOUNT_NAME: ${{ vars.AIFOUNDRY_ACCOUNT_NAME }}
+  AIFOUNDRY_PROJECT_NAME: ${{ vars.AIFOUNDRY_PROJECT_NAME }}
 
 jobs:
   deploy:
@@ -42,15 +43,19 @@ jobs:
             --query accessToken -o tsv)
           echo "token=$TOKEN" >> $GITHUB_OUTPUT
 
+      # ToDo: プロジェクト・エージェント未作成の場合は作成する
+
       - name: Deploy changed agents
         if: steps.changes.outputs.files != ''
         run: |
           set -euo pipefail
 
           for f in ${{ steps.changes.outputs.files }}; do
-            AGENT_NAME=$(basename $f .json)
-
-            echo "Deploying $AGENT_NAME"
+            # AGENT_NAME=$(basename $f .json)
+            # /agents/projects/{projectName}/{agentName}.json からprojectNameとagentNameを抽出する
+            AGENT_NAME=$(echo $f | awk -F'/' '{print $NF}' | sed 's/.json$//')
+            PROJECT_NAME=$(echo $f | awk -F'/' '{print $(NF-2)}')
+            echo "Deploying ${PROJECT_NAME}/${AGENT_NAME}"
 
             BODY=$(jq -n \
               --arg name "$AGENT_NAME" \
@@ -62,7 +67,7 @@ jobs:
             
             curl --fail-with-body --silent --show-error \
               -X POST \
-              "$PROJECT_ENDPOINT/agents/$AGENT_NAME?api-version=v1" \
+              "https://${{ env.AIFOUNDRY_ACCOUNT_NAME }}.services.ai.azure.com/api/projects/${PROJECT_NAME}/agents/$AGENT_NAME?api-version=v1" \
               -H "Authorization: Bearer ${{ steps.token.outputs.token }}" \
               -H "Content-Type: application/json" \
               -d "$BODY"

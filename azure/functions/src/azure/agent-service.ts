@@ -17,9 +17,9 @@ export const fetchAgentDefinition = async ({
 
   const domain = `${accountName}.services.ai.azure.com`;
   const projectEndpoint = `https://${domain}/api/projects/${projectName}`;
-  const accountEndpoint = `${projectEndpoint}/agents/${agentName}?api-version=v1`;
+  const agentEndpoint = `${projectEndpoint}/agents/${agentName}?api-version=v1`;
 
-  const agentRes = await fetch(accountEndpoint, {
+  const agentRes = await fetch(agentEndpoint, {
     headers: {
       Authorization: `Bearer ${token.token}`,
     },

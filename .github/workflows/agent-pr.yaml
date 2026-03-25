@@ -37,7 +37,7 @@ jobs:
           BRANCH=feature/${{ github.event.inputs.app_name }}/${{ github.event.inputs.deployment_name }}-${{ github.run_id }}
           git checkout -b "$BRANCH"
 
-          DIRECTORY=agents/${{ github.event.inputs.account_name }}/${{ github.event.inputs.project_name }}
+          DIRECTORY=agents/projects/${{ github.event.inputs.project_name }}
           mkdir -p "$DIRECTORY"
 
           FILE="$DIRECTORY/${{ github.event.inputs.app_name }}.json"
