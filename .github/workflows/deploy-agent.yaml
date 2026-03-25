@@ -167,8 +167,6 @@ jobs:
               -H "Content-Type: application/json" \
               -d "$APP_BODY"
 
-            echo $APP_BODY
-
             echo "Deploying agent ${AGENT_NAME} with version ${AGENT_VERSION}"
 
             DEPLOY_BODY=$(jq -n \
@@ -187,17 +185,9 @@ jobs:
                   ],
                   deploymentType: "Managed",
                   displayName: $displayName,
-                  protocols: [
-                    {
-                      protocol: "Agent",
-                      version: "1.0"
-                    }
-                  ],
                   state: "Starting"
                 }
               }')
-
-            echo "Deployment body: $DEPLOY_BODY"
 
             curl --fail-with-body --silent --show-error \
               -X PUT \
