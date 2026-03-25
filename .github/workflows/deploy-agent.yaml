@@ -179,7 +179,6 @@ jobs:
                 properties: {
                   agents: [
                     {
-                      agentId: $agentId,
                       agentName: $agentName,
                       agentVersion: $agentVersion
                     }
