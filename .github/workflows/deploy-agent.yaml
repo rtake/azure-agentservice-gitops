@@ -119,23 +119,16 @@ jobs:
               exit 1
             fi
 
-            AGENT_ID=$(jq -r '.id' "$AGENT_JSON")
             AGENT_VERSION=$(jq -r '.versions.latest.version' "$AGENT_JSON")
 
-            if [ -z "$AGENT_ID" ] || [ "$AGENT_ID" = "null" ] || [ -z "$AGENT_VERSION" ] || [ "$AGENT_VERSION" = "null" ]; then
-              echo "Failed to resolve agent id/version for ${AGENT_NAME}"
+            if [ -z "$AGENT_VERSION" ] || [ "$AGENT_VERSION" = "null" ]; then
+              echo "Failed to resolve agent version for ${AGENT_NAME}"
               cat "$AGENT_JSON" || true
               exit 1
             fi
 
             APP_NAME="${AGENT_NAME}"
             DEPLOYMENT_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
-
-            if [ "$AGENT_ID" = "null" ] || [ "$AGENT_ID" != "$AGENT_NAME" ]; then
-              echo "Unexpected agent id from Create/Update API for ${AGENT_NAME}"
-              cat "$AGENT_JSON" || true
-              exit 1
-            fi
 
             echo "Deploying agent ${AGENT_NAME} with version ${AGENT_VERSION}"
 
@@ -147,7 +140,8 @@ jobs:
                 accountName="${AIFOUNDRY_ACCOUNT_NAME}" \
                 projectName="${PROJECT_NAME}" \
                 agentName="${APP_NAME}" \
-                agentId="${AGENT_ID}" \
+                subscriptionId="${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+                resourceGroupName="${RESOURCE_GROUP_NAME}" \
                 agentVersion="${AGENT_VERSION}" \
                 deploymentId="${DEPLOYMENT_ID}"
 

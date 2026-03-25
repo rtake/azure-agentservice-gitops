@@ -1,9 +1,12 @@
 param accountName string
 param projectName string
 param agentName string
-param agentId string
+param subscriptionId string
+param resourceGroupName string
 param agentVersion string
 param deploymentId string
+
+var agentId = 'azureml://subscriptions/${subscriptionId}/resourceGroups/${resourceGroupName}/workspaces/${accountName}@${projectName}@AML/applications/${agentName}/agents/${agentName}'
 
 resource account 'Microsoft.CognitiveServices/accounts@2025-10-01-preview' existing = {
   name: accountName
