@@ -26,6 +26,9 @@ resource application 'Microsoft.CognitiveServices/accounts/projects/applications
         agentName: agentName
       }
     ]
+    authorizationPolicy: {
+      authorizationScheme: 'Default'
+    }
     trafficRoutingPolicy: {
       protocol: 'FixedRatio'
       rules: [
