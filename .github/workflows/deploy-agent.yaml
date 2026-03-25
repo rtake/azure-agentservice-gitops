@@ -297,4 +297,30 @@ jobs:
               -d "$APP_ROUTE_BODY" \
               -o "$APP_JSON"
 
+            FINAL_DEPLOY_STATUS=$(curl -s -o "$DEPLOY_JSON" -w "%{http_code}" \
+              -H "Authorization: Bearer ${ARM_TOKEN}" \
+              "$DEPLOY_URL")
+
+            if [ "$FINAL_DEPLOY_STATUS" != "200" ]; then
+              echo "Failed to fetch deployment provisioningState for ${AGENT_NAME}"
+              cat "$DEPLOY_JSON" || true
+              exit 1
+            fi
+
+            FINAL_APP_STATUS=$(curl -s -o "$APP_JSON" -w "%{http_code}" \
+              -H "Authorization: Bearer ${ARM_TOKEN}" \
+              "$APP_URL")
+
+            if [ "$FINAL_APP_STATUS" != "200" ]; then
+              echo "Failed to fetch application provisioningState for ${AGENT_NAME}"
+              cat "$APP_JSON" || true
+              exit 1
+            fi
+
+            DEPLOY_PROVISIONING_STATE=$(jq -r '.properties.provisioningState // .provisioningState // empty' "$DEPLOY_JSON")
+            APP_PROVISIONING_STATE=$(jq -r '.properties.provisioningState // .provisioningState // empty' "$APP_JSON")
+
+            echo "Deployment provisioningState for ${AGENT_NAME}: ${DEPLOY_PROVISIONING_STATE:-<empty>}"
+            echo "Application provisioningState for ${AGENT_NAME}: ${APP_PROVISIONING_STATE:-<empty>}"
+
           done <<< "$FILES"
