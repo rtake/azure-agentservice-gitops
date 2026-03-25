@@ -181,28 +181,6 @@ jobs:
               exit 1
             fi
 
-            for i in 1 2 3 4 5; do
-              APP_GET_STATUS=$(curl -s -o "$APP_JSON" -w "%{http_code}" \
-                -H "Authorization: Bearer ${ARM_TOKEN}" \
-                "$APP_URL")
-
-              if [ "$APP_GET_STATUS" = "200" ] && \
-                 [ "$(jq -r '.properties.agents[0].agentName // empty' "$APP_JSON")" = "$AGENT_NAME" ] && \
-                 [ -n "$(jq -r '.properties.agents[0].agentId // empty' "$APP_JSON")" ] && \
-                 [ -n "$(jq -r '.properties.trafficRoutingPolicy.rules[0].deploymentId // empty' "$APP_JSON")" ]; then
-                APP_DEPLOYMENT_ID=$(jq -r '.properties.trafficRoutingPolicy.rules[0].deploymentId' "$APP_JSON")
-                break
-              fi
-
-              if [ "$i" = "5" ]; then
-                echo "Application was not ready for deployment: ${AGENT_NAME}"
-                cat "$APP_JSON" || true
-                exit 1
-              fi
-
-              sleep 5
-            done
-
             echo "Deploying agent ${AGENT_NAME} with version ${AGENT_VERSION}"
 
             DEPLOY_STATUS=$(curl -s -o "$DEPLOY_JSON" -w "%{http_code}" \
