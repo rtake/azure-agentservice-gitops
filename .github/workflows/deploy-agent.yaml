@@ -203,12 +203,12 @@ jobs:
 
             echo $APP_BODY
 
-            echo "Deploying agent ${AGENT_NAME} with version ${AGENT_VERSION}"
+            echo "Deploying agent ${AGENT_NAME} with version ${SAFE_AGENT_VERSION}"
 
             DEPLOY_BODY=$(jq -n \
               --arg agentId "$AGENT_ID" \
               --arg agentName "$AGENT_NAME" \
-              --arg agentVersion "$AGENT_VERSION" \
+              --arg agentVersion "$SAFE_AGENT_VERSION" \
               --arg displayName "${AGENT_NAME} deployment" \
               '{
                 properties: {
