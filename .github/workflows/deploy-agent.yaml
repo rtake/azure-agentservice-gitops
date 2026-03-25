@@ -11,7 +11,10 @@ permissions:
 
 env:
   AIFOUNDRY_ACCOUNT_NAME: ${{ vars.AIFOUNDRY_ACCOUNT_NAME }}
+  RESOURCE_GROUP_NAME: ${{ vars.RESOURCE_GROUP_NAME }}
   PROJECT_NAME: "prod"
+  API_VERSION: "2025-10-01-preview"
+  PROJECT_API_VERSION: "2025-11-15-preview"
 
 jobs:
   deploy:
@@ -41,17 +44,26 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Get Foundry token
-        id: token
+        id: foundry_token
         run: |
           TOKEN=$(az account get-access-token \
             --resource https://ai.azure.com \
             --query accessToken -o tsv)
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
+      - name: Get ARM token
+        id: arm_token
+        run: |
+          TOKEN=$(az account get-access-token \
+            --resource https://management.azure.com/ \
+            --query accessToken -o tsv)
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
       - name: Deploy changed agents
         if: steps.changes.outputs.files != ''
         env:
-          TOKEN: ${{ steps.token.outputs.token }}
+          FOUNDRY_TOKEN: ${{ steps.foundry_token.outputs.token }}
+          ARM_TOKEN: ${{ steps.arm_token.outputs.token }}
         run: |
           set -euo pipefail
 
@@ -62,16 +74,16 @@ jobs:
             [ -z "$f" ] && continue
 
             AGENT_NAME=$(basename "$f" .json)
-            # PROJECT_NAME=$(echo "$f" | awk -F'/' '{print $(NF-1)}')
             echo "Processing ${PROJECT_NAME}/${AGENT_NAME}"
 
             GET_URL="${BASE_URL}/api/projects/${PROJECT_NAME}/agents/${AGENT_NAME}?api-version=v1"
             CREATE_URL="${BASE_URL}/api/projects/${PROJECT_NAME}/agents?api-version=v1"
             UPDATE_URL="${BASE_URL}/api/projects/${PROJECT_NAME}/agents/${AGENT_NAME}?api-version=v1"
 
-            # 存在確認
-            STATUS=$(curl -s -o /tmp/agent.json -w "%{http_code}" \
-              -H "Authorization: Bearer ${TOKEN}" \
+            AGENT_JSON=$(mktemp)
+
+            STATUS=$(curl -s -o "$AGENT_JSON" -w "%{http_code}" \
+              -H "Authorization: Bearer ${FOUNDRY_TOKEN}" \
               "$GET_URL" || true)
 
             CREATE_BODY=$(jq -n \
@@ -94,7 +106,7 @@ jobs:
               curl --fail-with-body --silent --show-error \
                 -X POST \
                 "$CREATE_URL" \
-                -H "Authorization: Bearer ${TOKEN}" \
+                -H "Authorization: Bearer ${FOUNDRY_TOKEN}" \
                 -H "Content-Type: application/json" \
                 -d "$CREATE_BODY"
 
@@ -104,14 +116,79 @@ jobs:
               curl --fail-with-body --silent --show-error \
                 -X POST \
                 "$UPDATE_URL" \
-                -H "Authorization: Bearer ${TOKEN}" \
+                -H "Authorization: Bearer ${FOUNDRY_TOKEN}" \
                 -H "Content-Type: application/json" \
                 -d "$UPDATE_BODY"
 
             else
               echo "Unexpected status code: $STATUS"
-              cat /tmp/agent.json || true
+              cat "$AGENT_JSON" || true
               exit 1
             fi
+
+            AGENT_ID=$(jq -r '.id' "$AGENT_JSON")
+            AGENT_VERSION=$(jq -r '.versions.latest.version' "$AGENT_JSON")
+
+            if [ -z "$AGENT_ID" ] || [ "$AGENT_ID" = "null" ] || [ -z "$AGENT_VERSION" ] || [ "$AGENT_VERSION" = "null" ]; then
+              echo "Failed to resolve agent id/version for ${AGENT_NAME}"
+              cat "$AGENT_JSON" || true
+              exit 1
+            fi
+
+            APP_NAME="${AGENT_NAME}"
+            DEPLOYMENT_NAME="default"
+
+            APP_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AIFOUNDRY_ACCOUNT_NAME}/projects/${PROJECT_NAME}/applications/${APP_NAME}?api-version=${API_VERSION}"
+            DEPLOY_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AIFOUNDRY_ACCOUNT_NAME}/projects/${PROJECT_NAME}/applications/${APP_NAME}/agentDeployments/${DEPLOYMENT_NAME}?api-version=${API_VERSION}"
+
+            APP_BODY=$(jq -n \
+              --arg displayName "$AGENT_NAME" \
+              --arg description "Published agent application for ${AGENT_NAME}" \
+              '{
+                properties: {
+                  displayName: $displayName,
+                  description: $description
+                }
+              }')
+
+            curl --fail-with-body --silent --show-error \
+              -X PUT \
+              "$APP_URL" \
+              -H "Authorization: Bearer ${ARM_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "$APP_BODY"
+
+            DEPLOY_BODY=$(jq -n \
+              --arg agentId "$AGENT_ID" \
+              --arg agentName "$AGENT_NAME" \
+              --arg agentVersion "$AGENT_VERSION" \
+              --arg displayName "${AGENT_NAME} deployment" \
+              '{
+                properties: {
+                  agents: [
+                    {
+                      agentId: $agentId,
+                      agentName: $agentName,
+                      agentVersion: $agentVersion
+                    }
+                  ],
+                  deploymentType: "Managed",
+                  displayName: $displayName,
+                  protocols: [
+                    {
+                      protocol: "Agent",
+                      version: "1.0"
+                    }
+                  ],
+                  state: "Starting"
+                }
+              }')
+
+            curl --fail-with-body --silent --show-error \
+              -X PUT \
+              "$DEPLOY_URL" \
+              -H "Authorization: Bearer ${ARM_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "$DEPLOY_BODY"
 
           done <<< "$FILES"

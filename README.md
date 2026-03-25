@@ -182,6 +182,7 @@ Azure Functionsの環境変数に以下の値を設定します。
 | 変数名                 | 概要                     |
 | ---------------------- | ------------------------ |
 | AIFOUNDRY_ACCOUNT_NAME | AI Foundryのアカウント名 |
+| RESOURCE_GROUP_NAME    | リソースグループ名       |
 
 ## テスト
 
@@ -208,7 +209,6 @@ GitHub上でワークフローが起動し、PR作成が確認できたら成功
 
 ### 優先度高
 
-- エージェント未作成の場合に作成できるようワークフローを修正する
 - ワークフローからデプロイしたエージェントをFoundryポータルから開くと、変更内容がない時にも「保存してください」というメッセージが出る
   - エージェントを保存するAPIを実行してからPublishする
 
@@ -218,6 +218,6 @@ GitHub上でワークフローが起動し、PR作成が確認できたら成功
 
 ### 優先度低
 
-- サービスプリンシパルをIaC(Bicep)に追加する
+- Bicepにサービスプリンシパルを追加する
 - Parse Log Functionの呼び出し元をSecure webhookに限定し、アクショングループからのみ呼び出せるようにする ([セキュア Webhook アクション グループを作成する](https://learn.microsoft.com/ja-jp/azure/azure-monitor/alerts/itsm-connector-secure-webhook-connections-azure-configuration#create-a-secure-webhook-action-group))
 - ネットワーク閉域化
