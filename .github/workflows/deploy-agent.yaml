@@ -188,7 +188,7 @@ jobs:
                   displayName: $displayName,
                   protocols: [
                     {
-                      protocol: "Agent",
+                      protocol: "Responses",
                       version: "1.0"
                     }
                   ],
