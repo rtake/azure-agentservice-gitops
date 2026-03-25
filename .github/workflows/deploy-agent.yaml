@@ -187,6 +187,8 @@ jobs:
                 }
               }')
 
+            echo "Deploy body: $DEPLOY_BODY"
+
             curl --fail-with-body --silent --show-error \
               -X PUT \
               "$DEPLOY_URL" \
