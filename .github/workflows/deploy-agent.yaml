@@ -79,13 +79,12 @@ jobs:
             echo "=== Processing ${AGENT_NAME} ==="
 
             GET_URL="${BASE_URL}/api/projects/${PROJECT_NAME}/agents/${AGENT_NAME}?api-version=v1"
-            AGENT_JSON=$(mktemp)
-
-            STATUS=$(curl --silent --show-error \
-              -o "$AGENT_JSON" \
+            GET_RESPONSE=$(curl --silent --show-error \
               -w "%{http_code}" \
               -H "Authorization: Bearer ${FOUNDRY_TOKEN}" \
               "$GET_URL" || true)
+            STATUS="${GET_RESPONSE: -3}"
+            AGENT_RESPONSE="${GET_RESPONSE%???}"
 
             if [ "$STATUS" = "404" ]; then
               echo "Creating agent ${PROJECT_NAME}/${AGENT_NAME}"
@@ -99,13 +98,14 @@ jobs:
                   definition: $def[0]
                 }')
 
-              curl --fail-with-body --silent --show-error \
+              AGENT_RESPONSE=$(
+                curl --fail-with-body --silent --show-error \
                 -X POST \
                 "$CREATE_URL" \
                 -H "Authorization: Bearer ${FOUNDRY_TOKEN}" \
                 -H "Content-Type: application/json" \
-                -d "$CREATE_BODY" \
-                -o "$AGENT_JSON"
+                -d "$CREATE_BODY"
+              )
             elif [ "$STATUS" = "200" ]; then
               echo "Updating agent ${PROJECT_NAME}/${AGENT_NAME}"
 
@@ -116,27 +116,28 @@ jobs:
                   definition: $def[0]
                 }')
 
-              curl --fail-with-body --silent --show-error \
+              AGENT_RESPONSE=$(
+                curl --fail-with-body --silent --show-error \
                 -X POST \
                 "$UPDATE_URL" \
                 -H "Authorization: Bearer ${FOUNDRY_TOKEN}" \
                 -H "Content-Type: application/json" \
-                -d "$UPDATE_BODY" \
-                -o "$AGENT_JSON"
+                -d "$UPDATE_BODY"
+              )
             else
               echo "Failed to check existing agent ${PROJECT_NAME}/${AGENT_NAME}: HTTP ${STATUS}"
-              cat "$AGENT_JSON" || true
+              [ -n "$AGENT_RESPONSE" ] && echo "$AGENT_RESPONSE"
               exit 1
             fi
 
-            echo "Agent response: $(cat "$AGENT_JSON")"
+            echo "Agent response: $AGENT_RESPONSE"
 
-            AGENT_ID=$(jq -r '.id' "$AGENT_JSON")
-            AGENT_VERSION=$(jq -r '.versions.latest.version' "$AGENT_JSON")
+            AGENT_ID=$(jq -r '.id' <<< "$AGENT_RESPONSE")
+            AGENT_VERSION=$(jq -r '.versions.latest.version' <<< "$AGENT_RESPONSE")
 
             if [ -z "$AGENT_ID" ] || [ "$AGENT_ID" = "null" ] || [ -z "$AGENT_VERSION" ] || [ "$AGENT_VERSION" = "null" ]; then
               echo "Failed to resolve agent id/version"
-              cat "$AGENT_JSON" || true
+              echo "$AGENT_RESPONSE"
               exit 1
             fi
 
@@ -206,17 +207,16 @@ jobs:
                 }
               }')
 
-            APP_JSON=$(mktemp)
+            APP_RESPONSE=$(
+              curl --fail-with-body --silent --show-error \
+                -X PUT \
+                "$APP_URL" \
+                -H "Authorization: Bearer ${ARM_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d "$APP_BODY"
+            )
 
-            curl --fail-with-body --silent --show-error \
-              -X PUT \
-              "$APP_URL" \
-              -H "Authorization: Bearer ${ARM_TOKEN}" \
-              -H "Content-Type: application/json" \
-              -d "$APP_BODY" \
-              -o "$APP_JSON"
-
-            echo "Application response: $(cat "$APP_JSON")"
+            echo "Application response: $APP_RESPONSE"
           done < <(jq -c '.[]' <<< "$AGENTS")
 
       - name: Create deployments
@@ -263,19 +263,18 @@ jobs:
                 }
               }')
 
-            DEPLOY_JSON=$(mktemp)
+            DEPLOY_RESPONSE=$(
+              curl --fail-with-body --silent --show-error \
+                -X PUT \
+                "$DEPLOY_URL" \
+                -H "Authorization: Bearer ${ARM_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d "$DEPLOY_BODY"
+            )
 
-            curl --fail-with-body --silent --show-error \
-              -X PUT \
-              "$DEPLOY_URL" \
-              -H "Authorization: Bearer ${ARM_TOKEN}" \
-              -H "Content-Type: application/json" \
-              -d "$DEPLOY_BODY" \
-              -o "$DEPLOY_JSON"
+            echo "Deployment response: $DEPLOY_RESPONSE"
 
-            echo "Deployment response: $(cat "$DEPLOY_JSON")"
-
-            DEPLOYMENT_ID=$(jq -r '.properties.deploymentId' "$DEPLOY_JSON")
+            DEPLOYMENT_ID=$(jq -r '.properties.deploymentId' <<< "$DEPLOY_RESPONSE")
             if [ -z "$DEPLOYMENT_ID" ] || [ "$DEPLOYMENT_ID" = "null" ]; then
               DEPLOYMENT_ID="/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AIFOUNDRY_ACCOUNT_NAME}/projects/${PROJECT_NAME}/applications/${APP_NAME}/agentDeployments/${DEPLOYMENT_NAME}"
             fi
@@ -347,15 +346,14 @@ jobs:
                 }
               }')
 
-            APP_LINK_JSON=$(mktemp)
+            APP_LINK_RESPONSE=$(
+              curl --fail-with-body --silent --show-error \
+                -X PUT \
+                "$APP_URL" \
+                -H "Authorization: Bearer ${ARM_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d "$APP_LINK_BODY"
+            )
 
-            curl --fail-with-body --silent --show-error \
-              -X PUT \
-              "$APP_URL" \
-              -H "Authorization: Bearer ${ARM_TOKEN}" \
-              -H "Content-Type: application/json" \
-              -d "$APP_LINK_BODY" \
-              -o "$APP_LINK_JSON"
-
-            echo "Application link response: $(cat "$APP_LINK_JSON")"
+            echo "Application link response: $APP_LINK_RESPONSE"
           done < <(jq -c '.[]' <<< "$AGENTS")
