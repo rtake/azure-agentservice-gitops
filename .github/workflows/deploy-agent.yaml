@@ -170,7 +170,7 @@ jobs:
                 }
               }')
 
-            echo $(cat "$DEPLOY_BODY")
+            echo "DEPLOY_BODY: $(cat $DEPLOY_BODY)"
 
             DEPLOY_JSON=$(mktemp)
 
