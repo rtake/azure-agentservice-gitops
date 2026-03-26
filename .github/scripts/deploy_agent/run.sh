@@ -14,7 +14,7 @@ source "${script_dir}/commands.sh"
 command_name="${1:-}"
 
 if [ -z "$command_name" ]; then
-  echo "Usage: $0 <collect-agents|upsert-applications|create-deployments|link-deployments>" >&2
+  echo "Usage: $0 <collect-agents|deploy-models|deploy-agent-infra>" >&2
   exit 1
 fi
 
@@ -22,14 +22,11 @@ case "$command_name" in
   collect-agents)
     collect_agents
     ;;
-  upsert-applications)
-    upsert_applications
+  deploy-models)
+    deploy_models
     ;;
-  create-deployments)
-    create_deployments
-    ;;
-  link-deployments)
-    link_deployments
+  deploy-agent-infra)
+    deploy_agent_infra
     ;;
   *)
     echo "Unknown command: $command_name" >&2

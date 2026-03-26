@@ -1,12 +1,11 @@
 param accountName string
 param projectName string
 param agentName string
-param subscriptionId string
-param resourceGroupName string
+param agentId string
 param agentVersion string
-param deploymentId string
+param deploymentName string
 
-var agentId = 'azureml://subscriptions/${subscriptionId}/resourceGroups/${resourceGroupName}/workspaces/${accountName}@${projectName}@AML/applications/${agentName}/agents/${agentName}'
+var deploymentId = '${project.id}/applications/${agentName}/agentDeployments/${deploymentName}'
 
 resource account 'Microsoft.CognitiveServices/accounts@2025-10-01-preview' existing = {
   name: accountName
@@ -29,7 +28,7 @@ resource application 'Microsoft.CognitiveServices/accounts/projects/applications
       }
     ]
     authorizationPolicy: {
-      authorizationScheme: 'Default'
+      type: 'Default'
     }
     trafficRoutingPolicy: {
       protocol: 'FixedRatio'
@@ -47,7 +46,7 @@ resource application 'Microsoft.CognitiveServices/accounts/projects/applications
 
 resource agentDeployment 'Microsoft.CognitiveServices/accounts/projects/applications/agentDeployments@2025-10-01-preview' = {
   parent: application
-  name: '${agentName}-${agentVersion}'
+  name: deploymentName
   properties: {
     displayName: agentName
     deploymentId: deploymentId

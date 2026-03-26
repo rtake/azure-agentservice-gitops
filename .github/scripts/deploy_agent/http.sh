@@ -1,18 +1,5 @@
 #!/usr/bin/env bash
 
-put_json() {
-  local url="$1"
-  local token="$2"
-  local body="$3"
-
-  curl --fail-with-body --silent --show-error \
-    -X PUT \
-    "$url" \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -d "$body"
-}
-
 post_json() {
   local url="$1"
   local token="$2"
