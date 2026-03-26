@@ -68,3 +68,4 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
 }
 
 output functionName string = functionApp.name
+output functionPrincipalId string = functionApp.identity.principalId

@@ -24,7 +24,17 @@ param githubRepo string = ''
 @secure()
 param githubToken string = ''
 
-var resourceToken = take(toLower(uniqueString(subscription().id, location)), 6)
+var resourceToken = take(toLower(uniqueString(resourceGroup().id, location)), 6)
+var devAiFoundryAccountName = 'aif-${resourceToken}-dev'
+var cognitiveServicesUserRoleDefinitionId = subscriptionResourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  'a97b65f3-24c7-4388-baec-2e87135dc908'
+)
+var functionAppCognitiveServicesUserRoleAssignmentName = guid(
+  resourceGroup().id,
+  devAiFoundryAccountName,
+  'function-app-cognitive-services-user'
+)
 
 module aiFoundry './modules/ai-foundry.bicep' = {
   name: 'aiFoundry'
@@ -62,6 +72,20 @@ module monitoring './modules/monitoring.bicep' = {
   params: {
     resourceToken: resourceToken
     monitorScopeId: aiFoundry.outputs.devAccountId
+  }
+}
+
+resource devAiFoundryAccount 'Microsoft.CognitiveServices/accounts@2025-10-01-preview' existing = {
+  name: devAiFoundryAccountName
+}
+
+resource functionAppCognitiveServicesUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: functionAppCognitiveServicesUserRoleAssignmentName
+  scope: devAiFoundryAccount
+  properties: {
+    roleDefinitionId: cognitiveServicesUserRoleDefinitionId
+    principalId: functionApp.outputs.functionPrincipalId
+    principalType: 'ServicePrincipal'
   }
 }
 
