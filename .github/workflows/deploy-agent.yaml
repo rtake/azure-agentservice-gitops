@@ -205,7 +205,7 @@ jobs:
                       version: "1.0"
                     }
                   ],
-                  state: "Starting"
+                  state: "Running"
                 }
               }')
 
