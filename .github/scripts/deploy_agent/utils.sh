@@ -34,6 +34,47 @@ append_agent() {
   jq -c --argjson item "$agent_json" '. + [$item]' <<< "$current_json"
 }
 
+default_model_config() {
+  local model_name="$1"
+
+  jq -cn \
+    --arg deploymentName "$model_name" \
+    --arg modelName "$model_name" \
+    '{
+      deploymentName: $deploymentName,
+      modelName: $modelName,
+      modelFormat: "OpenAI",
+      modelVersion: "",
+      modelPublisher: "",
+      skuName: "GlobalStandard",
+      skuCapacity: 1,
+      deploymentState: "Running",
+      serviceTier: "Default",
+      versionUpgradeOption: "OnceNewDefaultVersionAvailable"
+    }'
+}
+
+resolve_model_config() {
+  local model_name="$1"
+
+  if [ ! -f "$MODEL_CONFIG_FILE" ]; then
+    default_model_config "$model_name"
+    return
+  fi
+
+  jq -c \
+    --arg modelName "$model_name" \
+    '
+      .defaults as $defaults
+      | ($defaults + (.models[$modelName] // {}))
+      | . + {
+          deploymentName: (.deploymentName // $modelName),
+          modelName: (.modelName // $modelName)
+        }
+    ' \
+    "$MODEL_CONFIG_FILE"
+}
+
 require_json_field() {
   local json_payload="$1"
   local jq_filter="$2"

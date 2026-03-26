@@ -40,6 +40,7 @@ mainブランチにマージされたエージェントは、本番環境のAI F
 9. Pull Requestをレビュー・マージする
 10. mainへのマージをトリガーとしてGitHub Actionsが起動し、OIDCによる認証でAzureにアクセスする
 11. 本番環境のAI Foundryに対してエージェント発行APIを実行する
+12. 本番環境で不足しているモデルデプロイがあればBicepで作成し、その後アプリケーション/agent deploymentをBicepで反映する
 
 ## コンポーネント
 
@@ -83,7 +84,12 @@ mainへのPull Requestのマージをトリガーとして起動します。
 (処理概要)
 
 1. AI Foundryのアクセストークンを取得
-2. 本番環境のAI Foundryにエージェント発行APIを実行
+2. 変更されたエージェント定義をもとに本番環境のAI Foundryにエージェント発行APIを実行
+3. 本番環境に必要なモデルデプロイが存在するか確認し、不足分のみ `infra/model-deployment.bicep` で作成
+4. `infra/agent-publish.bicep` でアプリケーションとagent deploymentを反映
+
+モデルデプロイの既定値は [azure/infra/model-config.json](/azure/infra/model-config.json) で管理します。
+`models` にモデル名ごとの上書きを定義しない場合は、エージェント定義の `model` をそのままデプロイ名/モデル名として扱います。
 
 ## デプロイ手順
 
@@ -114,9 +120,39 @@ az deployment group create \
 
 ```
 az deployment group what-if \
-  -g <ResourceGroupName> \
+  --resource-group <ResourceGroupName> \
+  --template-file infra/main.bicep \
   -p infra/param.bicepparam
 ```
+
+個別テンプレートのDry-run例:
+
+```
+# モデルデプロイ
+az deployment group what-if \
+  --resource-group <ResourceGroupName> \
+  --template-file infra/model-deployment.bicep \
+  --parameters accountName=<FoundryAccountName> deploymentName=<ModelDeploymentName> modelName=<ModelName>
+
+# アプリケーション/agent deployment
+az deployment group what-if \
+  --resource-group <ResourceGroupName> \
+  --template-file infra/agent-publish.bicep \
+  --parameters \
+    accountName=<FoundryAccountName> \
+    projectName=prod \
+    agentName=<AgentName> \
+    agentId=<AgentId> \
+    agentVersion=<AgentVersion> \
+    deploymentName=<AgentDeploymentName>
+```
+
+`main.bicep` は以下のモジュールに分割しています。
+
+- `infra/modules/ai-foundry.bicep`
+- `infra/modules/storage-queue.bicep`
+- `infra/modules/function-app.bicep`
+- `infra/modules/monitoring.bicep`
 
 ### Azure Functionsのデプロイ
 
@@ -209,10 +245,9 @@ GitHub上でワークフローが起動し、PR作成が確認できたら成功
 
 ## 今後の改善点
 
-- Bicepでモデルをデプロイできるようにする
-  - 本番環境でモデルがデプロイされていない場合にはデプロイする
-- Bicep分割
-- Bicepにサービスプリンシパルを追加する
+- PRが重複しないようにする
+- 初回コミットの時にエージェントファイルの差分が検出できない
+- GitHub Actions用のサービスプリンシパルをBicepでデプロイできるようにする
 - Azure Functionsの環境変数の値をKey Vault等から安全に参照できるようにする(現在の構成ではデプロイのたびに更新が必要になってしまう)
 - Parse Log Functionの呼び出し元をSecure webhookに限定し、アクショングループからのみ呼び出せるようにする ([セキュア Webhook アクション グループを作成する](https://learn.microsoft.com/ja-jp/azure/azure-monitor/alerts/itsm-connector-secure-webhook-connections-azure-configuration#create-a-secure-webhook-action-group))
 - ネットワーク閉域化

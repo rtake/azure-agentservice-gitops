@@ -14,7 +14,7 @@ env:
   AIFOUNDRY_ACCOUNT_NAME: ${{ vars.AIFOUNDRY_ACCOUNT_NAME }}
   RESOURCE_GROUP_NAME: ${{ vars.RESOURCE_GROUP_NAME }}
   PROJECT_NAME: "prod"
-  API_VERSION: "2025-10-01-preview"
+  MODEL_CONFIG_FILE: "azure/infra/model-config.json"
 
 jobs:
   deploy:
@@ -65,14 +65,6 @@ jobs:
             --query accessToken -o tsv)
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
-      - name: Get ARM token
-        id: arm_token
-        run: |
-          TOKEN=$(az account get-access-token \
-            --resource https://management.azure.com/ \
-            --query accessToken -o tsv)
-          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
-
       - name: Create or update changed agents
         id: agents
         if: steps.changes.outputs.deploy_files != ''
@@ -83,30 +75,16 @@ jobs:
         run: |
           bash .github/scripts/deploy_agent/run.sh collect-agents
 
-      - name: Create or update applications
+      - name: Ensure model deployments exist
         if: steps.changes.outputs.deploy_files != ''
         env:
-          ARM_TOKEN: ${{ steps.arm_token.outputs.token }}
           AGENTS: ${{ steps.agents.outputs.agents }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: |
-          bash .github/scripts/deploy_agent/run.sh upsert-applications
+          bash .github/scripts/deploy_agent/run.sh deploy-models
 
-      - name: Create deployments
-        id: deployments
+      - name: Deploy applications and agent deployments
         if: steps.changes.outputs.deploy_files != ''
         env:
-          ARM_TOKEN: ${{ steps.arm_token.outputs.token }}
           AGENTS: ${{ steps.agents.outputs.agents }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: |
-          bash .github/scripts/deploy_agent/run.sh create-deployments
-
-      - name: Link deployments to applications
-        if: steps.changes.outputs.deploy_files != ''
-        env:
-          ARM_TOKEN: ${{ steps.arm_token.outputs.token }}
-          AGENTS: ${{ steps.deployments.outputs.agents }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        run: |
-          bash .github/scripts/deploy_agent/run.sh link-deployments
+          bash .github/scripts/deploy_agent/run.sh deploy-agent-infra
