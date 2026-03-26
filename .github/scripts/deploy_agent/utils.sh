@@ -46,7 +46,7 @@ default_model_config() {
       modelFormat: "OpenAI",
       modelVersion: "",
       modelPublisher: "",
-      skuName: "Standard",
+      skuName: "GlobalStandard",
       skuCapacity: 1,
       deploymentState: "Running",
       serviceTier: "Default",

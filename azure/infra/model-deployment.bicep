@@ -4,7 +4,7 @@ param modelName string
 param modelFormat string = 'OpenAI'
 param modelVersion string = ''
 param modelPublisher string = ''
-param skuName string = 'Standard'
+param skuName string = 'GlobalStandard'
 param skuCapacity int = 1
 param deploymentState string = 'Running'
 param serviceTier string = 'Default'
@@ -15,12 +15,16 @@ var deploymentModel = union(
     format: modelFormat
     name: modelName
   },
-  empty(modelVersion) ? {} : {
-    version: modelVersion
-  },
-  empty(modelPublisher) ? {} : {
-    publisher: modelPublisher
-  }
+  empty(modelVersion)
+    ? {}
+    : {
+        version: modelVersion
+      },
+  empty(modelPublisher)
+    ? {}
+    : {
+        publisher: modelPublisher
+      }
 )
 
 resource account 'Microsoft.CognitiveServices/accounts@2025-10-01-preview' existing = {
