@@ -210,16 +210,42 @@ jobs:
               }')
 
             DEPLOY_JSON=$(mktemp)
-
-            curl --fail-with-body --silent --show-error \
+            DEPLOY_STATUS=$(curl --silent --show-error \
+              -o "$DEPLOY_JSON" \
+              -w "%{http_code}" \
               -X PUT \
               "$DEPLOY_URL" \
               -H "Authorization: Bearer ${ARM_TOKEN}" \
               -H "Content-Type: application/json" \
-              -d "$DEPLOY_BODY" \
-              -o "$DEPLOY_JSON"
+              -d "$DEPLOY_BODY")
 
+            if [ "${DEPLOY_STATUS}" -lt 200 ] || [ "${DEPLOY_STATUS}" -ge 300 ]; then
+              echo "Create Deployment failed: HTTP ${DEPLOY_STATUS}"
+              cat "$DEPLOY_JSON" || true
+              exit 1
+            fi
+
+            echo "Create Deployment HTTP status: ${DEPLOY_STATUS}"
+            echo "Deployment state: $(jq -r '.properties.state // \"<missing>\"' "$DEPLOY_JSON")"
+            echo "Deployment provisioningState: $(jq -r '.properties.provisioningState // .properties.status // \"<missing>\"' "$DEPLOY_JSON")"
             echo "Deployment response: $(cat "$DEPLOY_JSON")"
+
+            DEPLOY_GET_JSON=$(mktemp)
+            DEPLOY_GET_STATUS=$(curl --silent --show-error \
+              -o "$DEPLOY_GET_JSON" \
+              -w "%{http_code}" \
+              -H "Authorization: Bearer ${ARM_TOKEN}" \
+              "$DEPLOY_URL")
+
+            echo "Deployment GET HTTP status: ${DEPLOY_GET_STATUS}"
+            if [ "${DEPLOY_GET_STATUS}" -ge 200 ] && [ "${DEPLOY_GET_STATUS}" -lt 300 ]; then
+              echo "Deployment GET state: $(jq -r '.properties.state // \"<missing>\"' "$DEPLOY_GET_JSON")"
+              echo "Deployment GET provisioningState: $(jq -r '.properties.provisioningState // .properties.status // \"<missing>\"' "$DEPLOY_GET_JSON")"
+              echo "Deployment GET response: $(cat "$DEPLOY_GET_JSON")"
+            else
+              echo "Deployment GET failed"
+              cat "$DEPLOY_GET_JSON" || true
+            fi
 
             DEPLOYMENT_ID=$(jq -r '.properties.deploymentId' "$DEPLOY_JSON")
             if [ -z "$DEPLOYMENT_ID" ] || [ "$DEPLOYMENT_ID" = "null" ]; then
