@@ -58,26 +58,25 @@ jobs:
             --query accessToken -o tsv)
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy changed agents
+      - name: Create or update changed agents
+        id: agents
         if: steps.changes.outputs.files != ''
         env:
           FOUNDRY_TOKEN: ${{ steps.foundry_token.outputs.token }}
-          ARM_TOKEN: ${{ steps.arm_token.outputs.token }}
           FILES: ${{ steps.changes.outputs.files }}
         run: |
           set -euo pipefail
+
+          BASE_URL="https://${AIFOUNDRY_ACCOUNT_NAME}.services.ai.azure.com"
+          AGENTS_JSON=$(jq -cn '[]')
 
           while IFS= read -r f; do
             [ -z "$f" ] && continue
 
             AGENT_NAME=$(basename "$f" .json)
-            BASE_URL="https://${AIFOUNDRY_ACCOUNT_NAME}.services.ai.azure.com"
 
             echo "=== Processing ${AGENT_NAME} ==="
 
-            # -----------------------------
-            # 1. Create or Update Agent
-            # -----------------------------
             GET_URL="${BASE_URL}/api/projects/${PROJECT_NAME}/agents/${AGENT_NAME}?api-version=v1"
             AGENT_JSON=$(mktemp)
 
@@ -144,11 +143,49 @@ jobs:
             APP_NAME="${AGENT_NAME}"
             DEPLOYMENT_NAME="v-${SAFE_AGENT_VERSION}"
 
-            # -----------------------------
-            # 2. Create/Update Application
-            # -----------------------------
+            AGENT_STATE=$(jq -c -n \
+              --arg agentName "$AGENT_NAME" \
+              --arg agentFile "$f" \
+              --arg agentId "$AGENT_ID" \
+              --arg agentVersion "$AGENT_VERSION" \
+              --arg appName "$APP_NAME" \
+              --arg deploymentName "$DEPLOYMENT_NAME" \
+              '{
+                agentName: $agentName,
+                agentFile: $agentFile,
+                agentId: $agentId,
+                agentVersion: $agentVersion,
+                appName: $appName,
+                deploymentName: $deploymentName
+              }')
+
+            AGENTS_JSON=$(jq -c \
+              --argjson item "$AGENT_STATE" \
+              '. + [$item]' \
+              <<< "$AGENTS_JSON")
+          done <<< "$FILES"
+
+          {
+            echo "agents<<EOF"
+            echo "$AGENTS_JSON"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create or update applications
+        if: steps.changes.outputs.files != ''
+        env:
+          ARM_TOKEN: ${{ steps.arm_token.outputs.token }}
+          AGENTS: ${{ steps.agents.outputs.agents }}
+        run: |
+          set -euo pipefail
+
+          while IFS= read -r agent; do
+            AGENT_NAME=$(jq -r '.agentName' <<< "$agent")
+            AGENT_ID=$(jq -r '.agentId' <<< "$agent")
+            APP_NAME=$(jq -r '.appName' <<< "$agent")
             APP_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AIFOUNDRY_ACCOUNT_NAME}/projects/${PROJECT_NAME}/applications/${APP_NAME}?api-version=${API_VERSION}"
-            DEPLOY_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AIFOUNDRY_ACCOUNT_NAME}/projects/${PROJECT_NAME}/applications/${APP_NAME}/agentDeployments/${APP_NAME}?api-version=${API_VERSION}"
+
+            echo "=== Creating or updating application ${APP_NAME} ==="
 
             APP_BODY=$(jq -n \
               --arg displayName "$AGENT_NAME" \
@@ -179,10 +216,28 @@ jobs:
               -o "$APP_JSON"
 
             echo "Application response: $(cat "$APP_JSON")"
+          done < <(jq -c '.[]' <<< "$AGENTS")
 
-            # -----------------------------
-            # 3. Create Deployment
-            # -----------------------------
+      - name: Create deployments
+        id: deployments
+        if: steps.changes.outputs.files != ''
+        env:
+          ARM_TOKEN: ${{ steps.arm_token.outputs.token }}
+          AGENTS: ${{ steps.agents.outputs.agents }}
+        run: |
+          set -euo pipefail
+
+          DEPLOYED_AGENTS_JSON=$(jq -cn '[]')
+
+          while IFS= read -r agent; do
+            AGENT_NAME=$(jq -r '.agentName' <<< "$agent")
+            AGENT_VERSION=$(jq -r '.agentVersion' <<< "$agent")
+            APP_NAME=$(jq -r '.appName' <<< "$agent")
+            DEPLOYMENT_NAME=$(jq -r '.deploymentName' <<< "$agent")
+            DEPLOY_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AIFOUNDRY_ACCOUNT_NAME}/projects/${PROJECT_NAME}/applications/${APP_NAME}/agentDeployments/${APP_NAME}?api-version=${API_VERSION}"
+
+            echo "=== Creating deployment for ${APP_NAME} ==="
+
             DEPLOY_BODY=$(jq -n \
               --arg agentName "$AGENT_NAME" \
               --arg agentVersion "$AGENT_VERSION" \
@@ -224,9 +279,40 @@ jobs:
               DEPLOYMENT_ID="/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AIFOUNDRY_ACCOUNT_NAME}/projects/${PROJECT_NAME}/applications/${APP_NAME}/agentDeployments/${DEPLOYMENT_NAME}"
             fi
 
-            # -----------------------------
-            # 4. Link deployment to application
-            # -----------------------------
+            DEPLOYED_AGENT=$(jq -c \
+              --arg deploymentId "$DEPLOYMENT_ID" \
+              '. + { deploymentId: $deploymentId }' \
+              <<< "$agent")
+
+            DEPLOYED_AGENTS_JSON=$(jq -c \
+              --argjson item "$DEPLOYED_AGENT" \
+              '. + [$item]' \
+              <<< "$DEPLOYED_AGENTS_JSON")
+          done < <(jq -c '.[]' <<< "$AGENTS")
+
+          {
+            echo "agents<<EOF"
+            echo "$DEPLOYED_AGENTS_JSON"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Link deployments to applications
+        if: steps.changes.outputs.files != ''
+        env:
+          ARM_TOKEN: ${{ steps.arm_token.outputs.token }}
+          AGENTS: ${{ steps.deployments.outputs.agents }}
+        run: |
+          set -euo pipefail
+
+          while IFS= read -r agent; do
+            AGENT_NAME=$(jq -r '.agentName' <<< "$agent")
+            AGENT_ID=$(jq -r '.agentId' <<< "$agent")
+            APP_NAME=$(jq -r '.appName' <<< "$agent")
+            DEPLOYMENT_ID=$(jq -r '.deploymentId' <<< "$agent")
+            APP_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AIFOUNDRY_ACCOUNT_NAME}/projects/${PROJECT_NAME}/applications/${APP_NAME}?api-version=${API_VERSION}"
+
+            echo "=== Linking deployment for ${APP_NAME} ==="
+
             APP_LINK_BODY=$(jq -n \
               --arg displayName "$AGENT_NAME" \
               --arg description "Published agent application for ${AGENT_NAME}" \
@@ -271,5 +357,4 @@ jobs:
               -o "$APP_LINK_JSON"
 
             echo "Application link response: $(cat "$APP_LINK_JSON")"
-
-          done <<< "$FILES"
+          done < <(jq -c '.[]' <<< "$AGENTS")
