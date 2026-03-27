@@ -20,8 +20,9 @@ on:
         type: string
         description: "Base64-encoded JSON string of the agent definition"
 
+# 1つのエージェントに対して同時に複数実行しない
 concurrency:
-  group: agent-pr-${{ github.event.inputs.project_name }}-${{ github.event.inputs.app_name }}-${{ github.event.inputs.deployment_name }}
+  group: agent-pr-${{ github.event.inputs.project_name }}-${{ github.event.inputs.app_name }}
   cancel-in-progress: false
 
 permissions:
@@ -37,9 +38,9 @@ jobs:
       - name: Create branch and write file
         id: prepare-branch
         run: |
-          set -e
+          set -euo pipefail
 
-          BRANCH=feature/${{ github.event.inputs.project_name }}/${{ github.event.inputs.app_name }}/${{ github.event.inputs.deployment_name }}
+          BRANCH=feature/${{ github.event.inputs.project_name }}/${{ github.event.inputs.app_name }}
           git checkout -B "$BRANCH"
 
           DIRECTORY=agents/projects/${{ github.event.inputs.project_name }}
@@ -58,7 +59,7 @@ jobs:
           git config user.name bot
           git config user.email bot@users.noreply.github.com
 
-          git add .
+          git add "$FILE"
           if git diff --cached --quiet; then
             echo "No changes to commit"
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
@@ -69,34 +70,43 @@ jobs:
           git commit -m "Add agent"
           git push --force-with-lease origin HEAD
 
-      - name: Check existing PR
-        id: existing-pr
+      - name: Close old PRs for same app_name
         if: steps.prepare-branch.outputs.has_changes == 'true'
         run: |
-          set -e
+          set -euo pipefail
 
-          BRANCH=feature/${{ github.event.inputs.project_name }}/${{ github.event.inputs.app_name }}/${{ github.event.inputs.deployment_name }}
-          PR_URL=$(gh pr list \
-            --head "$BRANCH" \
-            --base main \
+          APP_NAME='${{ github.event.inputs.app_name }}'
+          PROJECT_NAME='${{ github.event.inputs.project_name }}'
+
+          OLD_PRS=$(gh pr list \
             --state open \
-            --json url \
-            --jq '.[0].url // ""')
+            --json number,title,body \
+            --jq ".[] | select((.title | contains(\"$APP_NAME\")) or (.body | contains(\"app_name: $APP_NAME\"))) | .number")
 
-          echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
+          if [ -z "$OLD_PRS" ]; then
+            echo "No old PRs found"
+            exit 0
+          fi
+
+          for PR in $OLD_PRS; do
+            echo "Closing old PR #$PR"
+            gh pr close "$PR" --comment "Replaced by a newer PR for app_name: $APP_NAME in project: $PROJECT_NAME"
+          done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create PR
-        if: steps.prepare-branch.outputs.has_changes == 'true' && steps.existing-pr.outputs.url == ''
+        if: steps.prepare-branch.outputs.has_changes == 'true'
         run: |
+          set -euo pipefail
+
+          BODY=$(printf 'project_name: %s\napp_name: %s\ndeployment_name: %s' \
+            "${{ github.event.inputs.project_name }}" \
+            "${{ github.event.inputs.app_name }}" \
+            "${{ github.event.inputs.deployment_name }}")
+
           gh pr create \
             --title "Update agent ${{ github.event.inputs.app_name }}" \
-            --body "Deployment: ${{ github.event.inputs.deployment_name }}"
+            --body "$BODY"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Reuse existing PR
-        if: steps.prepare-branch.outputs.has_changes == 'true' && steps.existing-pr.outputs.url != ''
-        run: |
-          echo "Existing PR found: ${{ steps.existing-pr.outputs.url }}"
