@@ -98,7 +98,6 @@ jobs:
       - name: Deploy applications and agent deployments
         if: steps.changes.outputs.deploy_files != ''
         env:
-          # e.g. [{"agentName":"20260326-test","agentFile":"agents/projects/dev/20260326-test.json","agentId":"20260326-test","agentVersion":"1","deploymentName":"gpt-4.1-v-1","modelDeploymentName":"gpt-4.1","modelName":"gpt-4.1","modelFormat":"OpenAI","modelVersion":"","modelPublisher":"","skuName":"GlobalStandard","skuCapacity":1,"deploymentState":"Running","serviceTier":"Default","versionUpgradeOption":"OnceNewDefaultVersionAvailable"}]
           AGENTS: ${{ steps.agents.outputs.agents }}
         run: |
           bash .github/scripts/deploy_agent/run.sh deploy-agent-infra
