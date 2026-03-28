@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+      - feature/*
+      - check/*
 
 permissions:
   id-token: write
@@ -78,6 +80,14 @@ jobs:
             --query accessToken -o tsv)
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
+      - name: Get ARM token
+        id: arm_token
+        run: |
+          TOKEN=$(az account get-access-token \
+            --resource https://management.azure.com/ \
+            --query accessToken -o tsv)
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
       - name: Create or update changed agents
         id: agents
         if: steps.changes.outputs.deploy_files != ''
@@ -101,3 +111,31 @@ jobs:
           AGENTS: ${{ steps.agents.outputs.agents }}
         run: |
           bash .github/scripts/deploy_agent/run.sh deploy-agent-infra
+
+      - name: Create or update applications
+        if: steps.changes.outputs.deploy_files != ''
+        env:
+          ARM_TOKEN: ${{ steps.arm_token.outputs.token }}
+          AGENTS: ${{ steps.agents.outputs.agents }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          bash .github/scripts/deploy_agent/run.sh upsert-applications
+
+      - name: Create deployments
+        id: deployments
+        if: steps.changes.outputs.deploy_files != ''
+        env:
+          ARM_TOKEN: ${{ steps.arm_token.outputs.token }}
+          AGENTS: ${{ steps.agents.outputs.agents }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          bash .github/scripts/deploy_agent/run.sh create-deployments
+
+      - name: Link deployments to applications
+        if: steps.changes.outputs.deploy_files != ''
+        env:
+          ARM_TOKEN: ${{ steps.arm_token.outputs.token }}
+          AGENTS: ${{ steps.deployments.outputs.agents }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          bash .github/scripts/deploy_agent/run.sh link-deployments

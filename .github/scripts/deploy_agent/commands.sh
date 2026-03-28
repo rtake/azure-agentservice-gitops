@@ -11,7 +11,7 @@ collect_agents() {
     [ -z "$agent_file" ] && continue
 
     local agent_name get_url get_response status agent_response
-    local agent_id agent_version safe_agent_version deployment_name agent_state model_name model_config
+    local agent_id agent_version safe_agent_version app_name deployment_name agent_state model_name model_config
     local configured_deployment_name model_format model_version model_publisher sku_name sku_capacity deployment_state service_tier version_upgrade_option
 
     agent_name=$(agent_file_to_name "$agent_file")
@@ -63,6 +63,7 @@ collect_agents() {
     agent_id=$(require_json_field "$agent_response" '.id' "Failed to resolve agent id")
     agent_version=$(require_json_field "$agent_response" '.versions.latest.version' "Failed to resolve agent version")
     safe_agent_version=$(printf '%s' "$agent_version" | tr -c '[:alnum:]-' '-')
+    app_name="$agent_name"
     deployment_name="${agent_name}-v-${safe_agent_version}"
 
     agent_state=$(build_agent_state \
@@ -70,6 +71,7 @@ collect_agents() {
       "$agent_file" \
       "$agent_id" \
       "$agent_version" \
+      "$app_name" \
       "$deployment_name" \
       "$configured_deployment_name" \
       "$model_name" \
@@ -87,6 +89,7 @@ collect_agents() {
 
   write_output_json "agents" "$agents_json"
 }
+
 
 deploy_models() {
   local agents="${AGENTS:?AGENTS is required}"
@@ -175,5 +178,87 @@ deploy_agent_infra() {
         agentVersion="$agent_version" \
         deploymentName="$deployment_name" \
       --output none
+  done < <(jq -c '.[]' <<< "$agents")
+}
+
+upsert_applications() {
+  local agents="${AGENTS:?AGENTS is required}"
+  local arm_token="${ARM_TOKEN:?ARM_TOKEN is required}"
+
+  while IFS= read -r agent; do
+    local agent_name agent_id app_name app_response
+
+    agent_name=$(agent_field "$agent" "agentName")
+    agent_id=$(agent_field "$agent" "agentId")
+    app_name=$(agent_field "$agent" "appName")
+
+    echo "=== Creating or updating application ${app_name} ==="
+
+    app_response=$(put_json \
+      "$(application_url "$app_name")" \
+      "$arm_token" \
+      "$(build_application_body "$agent_name" "$agent_id")")
+    log_response "Application response" "$app_response"
+  done < <(jq -c '.[]' <<< "$agents")
+}
+
+create_deployments() {
+  local agents="${AGENTS:?AGENTS is required}"
+  local arm_token="${ARM_TOKEN:?ARM_TOKEN is required}"
+  local deployed_agents_json
+
+  deployed_agents_json=$(jq -cn '[]')
+
+  while IFS= read -r agent; do
+    local agent_name agent_version app_name deployment_name deploy_response deployment_id deployed_agent
+
+    agent_name=$(agent_field "$agent" "agentName")
+    agent_version=$(agent_field "$agent" "agentVersion")
+    app_name=$(agent_field "$agent" "appName")
+    deployment_name=$(agent_field "$agent" "deploymentName")
+
+    echo "=== Creating deployment for ${app_name} ==="
+
+    deploy_response=$(put_json \
+      "$(deployment_url "$app_name")" \
+      "$arm_token" \
+      "$(build_deployment_body "$agent_name" "$agent_version")")
+    log_response "Deployment response" "$deploy_response"
+
+    deployment_id=$(jq -r '.properties.deploymentId' <<< "$deploy_response")
+    if [ -z "$deployment_id" ] || [ "$deployment_id" = "null" ]; then
+      deployment_id=$(fallback_deployment_id "$app_name" "$deployment_name")
+    fi
+
+    deployed_agent=$(jq -c \
+      --arg deploymentId "$deployment_id" \
+      '. + { deploymentId: $deploymentId }' \
+      <<< "$agent")
+
+    deployed_agents_json=$(append_agent "$deployed_agents_json" "$deployed_agent")
+  done < <(jq -c '.[]' <<< "$agents")
+
+  write_output_json "agents" "$deployed_agents_json"
+}
+
+link_deployments() {
+  local agents="${AGENTS:?AGENTS is required}"
+  local arm_token="${ARM_TOKEN:?ARM_TOKEN is required}"
+
+  while IFS= read -r agent; do
+    local agent_name agent_id app_name deployment_id app_link_response
+
+    agent_name=$(agent_field "$agent" "agentName")
+    agent_id=$(agent_field "$agent" "agentId")
+    app_name=$(agent_field "$agent" "appName")
+    deployment_id=$(agent_field "$agent" "deploymentId")
+
+    echo "=== Linking deployment for ${app_name} ==="
+
+    app_link_response=$(put_json \
+      "$(application_url "$app_name")" \
+      "$arm_token" \
+      "$(build_application_link_body "$agent_name" "$agent_id" "$deployment_id")")
+    log_response "Application link response" "$app_link_response"
   done < <(jq -c '.[]' <<< "$agents")
 }
