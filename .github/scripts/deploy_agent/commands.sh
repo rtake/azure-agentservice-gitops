@@ -84,6 +84,7 @@ collect_agents() {
       "$service_tier" \
       "$version_upgrade_option")
 
+    echo "Agent state for ${agent_name}: ${agent_state}"
     agents_json=$(append_agent "$agents_json" "$agent_state")
   done <<< "$files"
 
