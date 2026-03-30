@@ -181,6 +181,7 @@ jobs:
 
           DEPLOYMENT_NAME="$AGENT_NAME-$AGENT_VERSION"
           DEPLOY_URL="${BASE_URL}/applications/${APP_NAME}/agentDeployments/${DEPLOYMENT_NAME}?api-version=${API_VERSION}"
+          echo "DEPLOY_URL $DEPLOY_URL"
 
           echo "=== Creating or updating deployment ${APP_NAME}/${DEPLOYMENT_NAME} ==="
 
