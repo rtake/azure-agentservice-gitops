@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/*
+      - refactor*
 
 permissions:
   id-token: write
@@ -32,60 +33,79 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Get token
+        id: token
+        run: |
+          AIFOUNDRY_TOKEN=$(az account get-access-token \
+            --resource https://ai.azure.com \
+            --query accessToken -o tsv)
+          echo "aifoundry_token=$AIFOUNDRY_TOKEN" >> "$GITHUB_OUTPUT"
+
+          ARM_TOKEN=$(az account get-access-token \
+            --resource https://management.azure.com/ \
+            --query accessToken -o tsv)
+          echo "arm_token=$ARM_TOKEN" >> "$GITHUB_OUTPUT"
+
       - name: Detect changed agent
         id: changes
         run: |
           set -euo pipefail
 
-          CHANGED=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" | grep '^agents/.*\.json$' || true)
-          COUNT=$(printf '%s\n' "$CHANGED" | sed '/^$/d' | wc -l | tr -d ' ')
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.sha }}"
+          ZERO="0000000000000000000000000000000000000000"
+
+          # diff取得（initial commit対応）
+          if [ "$BEFORE" = "$ZERO" ]; then
+            if git rev-parse "${AFTER}^" >/dev/null 2>&1; then
+              DIFF=$(git diff --name-status "${AFTER}^" "$AFTER")
+            else
+              DIFF=$(git diff-tree --root --no-commit-id --name-status -r "$AFTER")
+            fi
+          else
+            DIFF=$(git diff --name-status "$BEFORE" "$AFTER")
+          fi
+
+          # agents配下のjsonだけ抽出
+          TARGET=$(printf '%s\n' "$DIFF" \
+            | awk '$2 ~ /^agents\/.*\.json$/ { print $1 ":" $2 }')
+
+          COUNT=$(printf '%s\n' "$TARGET" | sed '/^$/d' | wc -l | tr -d ' ')
 
           if [ "$COUNT" -eq 0 ]; then
             echo "file=" >> "$GITHUB_OUTPUT"
+            echo "status=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           if [ "$COUNT" -gt 1 ]; then
-            echo "Only one agent file is allowed"
-            printf '%s\n' "$CHANGED"
+            echo "Only one agent change is allowed"
+            printf '%s\n' "$TARGET"
             exit 1
           fi
 
-          FILE=$(printf '%s\n' "$CHANGED" | sed '/^$/d' | head -n1)
+          STATUS=$(echo "$TARGET" | cut -d: -f1)
+          FILE=$(echo "$TARGET" | cut -d: -f2)
+
           echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
 
-      - name: Get Foundry token
-        id: foundry_token
-        run: |
-          TOKEN=$(az account get-access-token \
-            --resource https://ai.azure.com \
-            --query accessToken -o tsv)
-          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
-
-      - name: Get ARM token
-        id: arm_token
-        run: |
-          TOKEN=$(az account get-access-token \
-            --resource https://management.azure.com/ \
-            --query accessToken -o tsv)
-          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
-
-      - name: Create or update agent
+      - name: Create agent or agent version for existing agent
         id: agent
         if: steps.changes.outputs.file != ''
         env:
-          FOUNDRY_TOKEN: ${{ steps.foundry_token.outputs.token }}
+          FOUNDRY_TOKEN: ${{ steps.token.outputs.aifoundry_token }}
           FILE: ${{ steps.changes.outputs.file }}
         run: |
           set -euo pipefail
 
-          BASE_URL="https://${AIFOUNDRY_ACCOUNT_NAME}.services.ai.azure.com"
+          AIFOUNDRY_BASE_URL="https://${AIFOUNDRY_ACCOUNT_NAME}.services.ai.azure.com"
 
           AGENT_NAME=$(basename "$FILE" .json)
 
           echo "=== Processing ${AGENT_NAME} ==="
 
-          GET_URL="${BASE_URL}/api/projects/${PROJECT_NAME}/agents/${AGENT_NAME}?api-version=v1"
+          GET_URL="${AIFOUNDRY_BASE_URL}/api/projects/${PROJECT_NAME}/agents/${AGENT_NAME}?api-version=v1"
           GET_RESPONSE=$(curl --silent --show-error \
             -w "%{http_code}" \
             -H "Authorization: Bearer ${FOUNDRY_TOKEN}" \
@@ -95,9 +115,9 @@ jobs:
           AGENT_RESPONSE="${GET_RESPONSE%???}"
 
           if [ "$STATUS" = "404" ]; then
-            echo "Creating agent ${PROJECT_NAME}/${AGENT_NAME}"
+            echo "Creating new agent ${PROJECT_NAME}/${AGENT_NAME}"
 
-            CREATE_URL="${BASE_URL}/api/projects/${PROJECT_NAME}/agents?api-version=v1"
+            CREATE_URL="${AIFOUNDRY_BASE_URL}/api/projects/${PROJECT_NAME}/agents?api-version=v1"
             CREATE_BODY=$(jq -n \
               --arg name "$AGENT_NAME" \
               --slurpfile def "$FILE" \
@@ -115,9 +135,9 @@ jobs:
                 -d "$CREATE_BODY"
             )
           elif [ "$STATUS" = "200" ]; then
-            echo "Updating agent ${PROJECT_NAME}/${AGENT_NAME}"
+            echo "Updating agent (create new agent version) ${PROJECT_NAME}/${AGENT_NAME}"
 
-            UPDATE_URL="${BASE_URL}/api/projects/${PROJECT_NAME}/agents/${AGENT_NAME}?api-version=v1"
+            UPDATE_URL="${AIFOUNDRY_BASE_URL}/api/projects/${PROJECT_NAME}/agents/${AGENT_NAME}?api-version=v1"
             UPDATE_BODY=$(jq -n \
               --slurpfile def "$FILE" \
               '{
@@ -167,8 +187,9 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Create or update application
+        if: steps.changes.outputs.file != ''
         env:
-          ARM_TOKEN: ${{ steps.arm_token.outputs.token }}
+          ARM_TOKEN: ${{ steps.token.outputs.arm_token }}
           AGENT: ${{ steps.agent.outputs.agent }}
         run: |
           set -euo pipefail
@@ -211,9 +232,10 @@ jobs:
           echo "Application response: $APP_RESPONSE"
 
       - name: Create deployment
+        if: steps.changes.outputs.file != ''
         id: deployment
         env:
-          ARM_TOKEN: ${{ steps.arm_token.outputs.token }}
+          ARM_TOKEN: ${{ steps.token.outputs.arm_token }}
           AGENT: ${{ steps.agent.outputs.agent }}
         run: |
           set -euo pipefail
@@ -265,32 +287,33 @@ jobs:
 
           DEPLOYMENT_ID=$(jq -r '.properties.deploymentId' <<< "$DEPLOY_RESPONSE")
 
-          if [ -z "$DEPLOYMENT_ID" ] || [ "$DEPLOYMENT_ID" = "null" ]; then
-            DEPLOYMENT_ID="${DEPLOY_URL}"
-          fi
-
-          AGENT_WITH_DEPLOY=$(jq -c \
+          DEPLOYMENT=$(jq -c -n \
             --arg deploymentId "$DEPLOYMENT_ID" \
-            '. + { deploymentId: $deploymentId }' \
-            <<< "$AGENT")
+            '{
+              deploymentId: $deploymentId
+            }')
 
           {
-            echo "agent<<EOF"
-            echo "$AGENT_WITH_DEPLOY"
+            echo "deployment<<EOF"
+            echo $DEPLOYMENT
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Link deployment to application
+      - name: Update application to refer the new deployment
+        if: steps.changes.outputs.file != ''
         env:
-          ARM_TOKEN: ${{ steps.arm_token.outputs.token }}
-          AGENT: ${{ steps.deployment.outputs.agent }}
+          ARM_TOKEN: ${{ steps.token.outputs.arm_token }}
+          AGENT: ${{ steps.agent.outputs.agent }}
+          DEPLOYMENT: ${{ steps.deployment.outputs.deployment }}
         run: |
           set -euo pipefail
+
+          echo "DEPLOYMENT $DEPLOYMENT"
 
           AGENT_NAME=$(jq -r '.agentName' <<< "$AGENT")
           AGENT_ID=$(jq -r '.agentId' <<< "$AGENT")
           APP_NAME=$(jq -r '.appName' <<< "$AGENT")
-          DEPLOYMENT_ID=$(jq -r '.deploymentId' <<< "$AGENT")
+          DEPLOYMENT_ID=$(jq -r '.deploymentId' <<< "$DEPLOYMENT")
 
           APP_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AIFOUNDRY_ACCOUNT_NAME}/projects/${PROJECT_NAME}/applications/${APP_NAME}?api-version=${API_VERSION}"
 
