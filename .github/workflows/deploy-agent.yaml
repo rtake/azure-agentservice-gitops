@@ -108,7 +108,6 @@ jobs:
                   name: $modelName,
                   format: "OpenAI",
                 },
-                serviceTier: "Priority"
               },
               sku: {
                 name: "GlobalStandard",
