@@ -240,7 +240,7 @@ jobs:
             APP_NAME=$(jq -r '.appName' <<< "$agent")
 
             DEPLOYMENT_NAME="$APP_NAME-$AGENT_VERSION"
-            DEPLOY_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AIFOUNDRY_ACCOUNT_NAME}/projects/${PROJECT_NAME}/applications/${APP_NAME}/agentDeployments/${APP_NAME}?api-version=${API_VERSION}"
+            DEPLOY_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AIFOUNDRY_ACCOUNT_NAME}/projects/${PROJECT_NAME}/applications/${APP_NAME}/agentDeployments/${DEPLOYMENT_NAME}?api-version=${API_VERSION}"
 
             DEPLOY_BODY=$(jq -n \
               --arg agentName "$AGENT_NAME" \
@@ -278,7 +278,7 @@ jobs:
 
             DEPLOYMENT_ID=$(jq -r '.properties.deploymentId' <<< "$DEPLOY_RESPONSE")
             if [ -z "$DEPLOYMENT_ID" ] || [ "$DEPLOYMENT_ID" = "null" ]; then
-              DEPLOYMENT_ID="/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AIFOUNDRY_ACCOUNT_NAME}/projects/${PROJECT_NAME}/applications/${APP_NAME}/agentDeployments/${DEPLOYMENT_NAME}"
+              DEPLOYMENT_ID=""
             fi
           done < <(jq -c '.[]' <<< "$AGENTS")
 
