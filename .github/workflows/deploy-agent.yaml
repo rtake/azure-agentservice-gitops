@@ -5,7 +5,6 @@ on:
     branches:
       - main
       - feature/*
-      - refactor*
 
 permissions:
   id-token: write
@@ -220,16 +219,15 @@ jobs:
               }
             }')
 
-          APP_RESPONSE=$(
-            curl --fail-with-body --silent --show-error \
-              -X PUT \
-              "$APP_URL" \
-              -H "Authorization: Bearer ${ARM_TOKEN}" \
-              -H "Content-Type: application/json" \
-              -d "$APP_BODY"
-          )
-
-          echo "Application response: $APP_RESPONSE"
+          # APP_RESPONSE=$(
+          #   curl --fail-with-body --silent --show-error \
+          #     -X PUT \
+          #     "$APP_URL" \
+          #     -H "Authorization: Bearer ${ARM_TOKEN}" \
+          #     -H "Content-Type: application/json" \
+          #     -d "$APP_BODY"
+          # )
+          # echo "Application response: $APP_RESPONSE"
 
       - name: Create deployment
         if: steps.changes.outputs.file != ''

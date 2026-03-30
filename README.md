@@ -83,14 +83,10 @@ mainへのPull Requestのマージをトリガーとして起動します。
 
 (処理概要)
 
-1. AI Foundryのアクセストークンを取得
-2. 変更されたエージェント定義をもとに本番環境のAI Foundryにエージェント発行APIを実行
-3. 本番環境に必要なモデルデプロイが存在するか確認し、不足分のみ `infra/model-deployment.bicep` で作成
-4. `infra/agent-publish.bicep` でアプリケーションとagent deploymentを反映
-
-モデルデプロイの既定値は [azure/infra/model-config.json](/azure/infra/model-config.json) で管理します。
-`models` にモデル名ごとの上書きを定義しない場合は、エージェント定義の `model` をそのままデプロイ名/モデル名として扱います。
-Azure の application / agent deployment リソース名には使用可能な文字制約があるため、デプロイ時にはエージェント名やバージョンから Azure 向けの安全な名前を自動生成します。表示名とエージェント参照には元のエージェント名を維持します。
+1. AI Foundry APIとARM APIのアクセストークンを取得
+2. 変更されたエージェント定義をAI Foundryにアップロードし[agent version](https://learn.microsoft.com/ja-jp/azure/foundry/agents/how-to/publish-agent#understand-agent-applications-and-deployments)を新規作成
+3. デプロイメントを新規作成
+4. アプリケーションの向き先を新規作成したデプロイメントに設定
 
 ## デプロイ手順
 
@@ -125,36 +121,6 @@ az deployment group what-if \
   --template-file infra/main.bicep \
   -p infra/param.bicepparam
 ```
-
-個別テンプレートのDry-run例:
-
-```
-# モデルデプロイ
-az deployment group what-if \
-  --resource-group <ResourceGroupName> \
-  --template-file infra/model-deployment.bicep \
-  --parameters accountName=<FoundryAccountName> deploymentName=<ModelDeploymentName> modelName=<ModelName>
-
-# アプリケーション/agent deployment
-az deployment group what-if \
-  --resource-group <ResourceGroupName> \
-  --template-file infra/agent-publish.bicep \
-  --parameters \
-    accountName=<FoundryAccountName> \
-    projectName=prod \
-    applicationName=<SafeApplicationName> \
-    agentName=<AgentName> \
-    agentId=<AgentId> \
-    agentVersion=<AgentVersion> \
-    deploymentName=<AgentDeploymentName>
-```
-
-`main.bicep` は以下のモジュールに分割しています。
-
-- `infra/modules/ai-foundry.bicep`
-- `infra/modules/storage-queue.bicep`
-- `infra/modules/function-app.bicep`
-- `infra/modules/monitoring.bicep`
 
 ### Azure Functionsのデプロイ
 
