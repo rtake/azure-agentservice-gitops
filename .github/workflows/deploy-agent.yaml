@@ -50,9 +50,30 @@ jobs:
           ARM_TOKEN: ${{ steps.token.outputs.arm_token }}
         run: |
           URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AIFOUNDRY_ACCOUNT_NAME}/deployments?api-version=${API_VERSION}"
-          curl -X GET "$URL" \
+
+          BODY=$(jq -n \
+            --arg agentName "$AGENT_NAME" \
+            --arg agentVersion "$AGENT_VERSION" \
+            --arg displayName "${AGENT_NAME} deployment" \
+            '{
+              properties: {
+                deploymentState: "Running",
+                model: {
+                  name: "ada",
+                  format: "OpenAI",
+                },
+                serviceTier: "Priority"
+              },
+              sku: {
+                name: "GlobalStandard",
+                capacity: 1
+              }
+            }')
+
+          curl -X PUT "$URL" \
             -H "Authorization: Bearer ${ARM_TOKEN}" \
             -H "Content-Type: application/json" \
+            -d "$BODY"
 
       - name: Detect changed agent
         id: changes
