@@ -210,139 +210,132 @@ jobs:
 
           echo "Application response: $APP_RESPONSE"
 
-      - name: Create deployments
-        id: deployments
+      - name: Create deployment
+        id: deployment
         env:
           ARM_TOKEN: ${{ steps.arm_token.outputs.token }}
-          AGENTS: ${{ steps.agent.outputs.agent }}
+          AGENT: ${{ steps.agent.outputs.agent }}
         run: |
           set -euo pipefail
 
-          DEPLOYED_AGENTS_JSON=$(jq -cn '[]')
+          AGENT_NAME=$(jq -r '.agentName' <<< "$AGENT")
+          AGENT_VERSION=$(jq -r '.agentVersion' <<< "$AGENT")
+          APP_NAME=$(jq -r '.appName' <<< "$AGENT")
 
-          while IFS= read -r agent; do
-            AGENT_NAME=$(jq -r '.agentName' <<< "$agent")
-            AGENT_VERSION=$(jq -r '.agentVersion' <<< "$agent")
-            APP_NAME=$(jq -r '.appName' <<< "$agent")
-            DEPLOYMENT_NAME=$(jq -r '.deploymentName' <<< "$agent")
-            DEPLOY_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AIFOUNDRY_ACCOUNT_NAME}/projects/${PROJECT_NAME}/applications/${APP_NAME}/agentDeployments/${APP_NAME}?api-version=${API_VERSION}"
+          DEPLOYMENT_NAME="${APP_NAME}"
 
-            echo "=== Creating deployment for ${APP_NAME} ==="
+          DEPLOY_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AIFOUNDRY_ACCOUNT_NAME}/projects/${PROJECT_NAME}/applications/${APP_NAME}/agentDeployments/${DEPLOYMENT_NAME}?api-version=${API_VERSION}"
 
-            DEPLOY_BODY=$(jq -n \
-              --arg agentName "$AGENT_NAME" \
-              --arg agentVersion "$AGENT_VERSION" \
-              --arg displayName "${AGENT_NAME} deployment" \
-              '{
-                properties: {
-                  agents: [
-                    {
-                      agentName: $agentName,
-                      agentVersion: $agentVersion
-                    }
-                  ],
-                  deploymentType: "Managed",
-                  displayName: $displayName,
-                  protocols: [
-                    {
-                      protocol: "Responses",
-                      version: "1.0"
-                    }
-                  ],
-                  state: "Starting"
-                }
-              }')
+          echo "=== Creating deployment for ${APP_NAME} ==="
 
-            DEPLOY_RESPONSE=$(
-              curl --fail-with-body --silent --show-error \
-                -X PUT \
-                "$DEPLOY_URL" \
-                -H "Authorization: Bearer ${ARM_TOKEN}" \
-                -H "Content-Type: application/json" \
-                -d "$DEPLOY_BODY"
-            )
+          DEPLOY_BODY=$(jq -n \
+            --arg agentName "$AGENT_NAME" \
+            --arg agentVersion "$AGENT_VERSION" \
+            --arg displayName "${AGENT_NAME} deployment" \
+            '{
+              properties: {
+                agents: [
+                  {
+                    agentName: $agentName,
+                    agentVersion: $agentVersion
+                  }
+                ],
+                deploymentType: "Managed",
+                displayName: $displayName,
+                protocols: [
+                  {
+                    protocol: "Responses",
+                    version: "1.0"
+                  }
+                ],
+                state: "Starting"
+              }
+            }')
 
-            echo "Deployment response: $DEPLOY_RESPONSE"
+          DEPLOY_RESPONSE=$(
+            curl --fail-with-body --silent --show-error \
+              -X PUT \
+              "$DEPLOY_URL" \
+              -H "Authorization: Bearer ${ARM_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "$DEPLOY_BODY"
+          )
 
-            DEPLOYMENT_ID=$(jq -r '.properties.deploymentId' <<< "$DEPLOY_RESPONSE")
-            if [ -z "$DEPLOYMENT_ID" ] || [ "$DEPLOYMENT_ID" = "null" ]; then
-              DEPLOYMENT_ID="/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AIFOUNDRY_ACCOUNT_NAME}/projects/${PROJECT_NAME}/applications/${APP_NAME}/agentDeployments/${DEPLOYMENT_NAME}"
-            fi
+          echo "Deployment response: $DEPLOY_RESPONSE"
 
-            DEPLOYED_AGENT=$(jq -c \
-              --arg deploymentId "$DEPLOYMENT_ID" \
-              '. + { deploymentId: $deploymentId }' \
-              <<< "$agent")
+          DEPLOYMENT_ID=$(jq -r '.properties.deploymentId' <<< "$DEPLOY_RESPONSE")
 
-            DEPLOYED_AGENTS_JSON=$(jq -c \
-              --argjson item "$DEPLOYED_AGENT" \
-              '. + [$item]' \
-              <<< "$DEPLOYED_AGENTS_JSON")
-          done < <(jq -c '.[]' <<< "$AGENTS")
+          if [ -z "$DEPLOYMENT_ID" ] || [ "$DEPLOYMENT_ID" = "null" ]; then
+            DEPLOYMENT_ID="${DEPLOY_URL}"
+          fi
+
+          AGENT_WITH_DEPLOY=$(jq -c \
+            --arg deploymentId "$DEPLOYMENT_ID" \
+            '. + { deploymentId: $deploymentId }' \
+            <<< "$AGENT")
 
           {
-            echo "agents<<EOF"
-            echo "$DEPLOYED_AGENTS_JSON"
+            echo "agent<<EOF"
+            echo "$AGENT_WITH_DEPLOY"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Link deployments to applications
+      - name: Link deployment to application
         env:
           ARM_TOKEN: ${{ steps.arm_token.outputs.token }}
-          AGENTS: ${{ steps.deployments.outputs.agents }}
+          AGENT: ${{ steps.deployment.outputs.agent }}
         run: |
           set -euo pipefail
 
-          while IFS= read -r agent; do
-            AGENT_NAME=$(jq -r '.agentName' <<< "$agent")
-            AGENT_ID=$(jq -r '.agentId' <<< "$agent")
-            APP_NAME=$(jq -r '.appName' <<< "$agent")
-            DEPLOYMENT_ID=$(jq -r '.deploymentId' <<< "$agent")
-            APP_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AIFOUNDRY_ACCOUNT_NAME}/projects/${PROJECT_NAME}/applications/${APP_NAME}?api-version=${API_VERSION}"
+          AGENT_NAME=$(jq -r '.agentName' <<< "$AGENT")
+          AGENT_ID=$(jq -r '.agentId' <<< "$AGENT")
+          APP_NAME=$(jq -r '.appName' <<< "$AGENT")
+          DEPLOYMENT_ID=$(jq -r '.deploymentId' <<< "$AGENT")
 
-            echo "=== Linking deployment for ${APP_NAME} ==="
+          APP_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AIFOUNDRY_ACCOUNT_NAME}/projects/${PROJECT_NAME}/applications/${APP_NAME}?api-version=${API_VERSION}"
 
-            APP_LINK_BODY=$(jq -n \
-              --arg displayName "$AGENT_NAME" \
-              --arg description "Published agent application for ${AGENT_NAME}" \
-              --arg agentId "$AGENT_ID" \
-              --arg agentName "$AGENT_NAME" \
-              --arg deploymentId "$DEPLOYMENT_ID" \
-              '{
-                properties: {
-                  agents: [
-                    {
-                      agentId: $agentId,
-                      agentName: $agentName
-                    }
-                  ],
-                  displayName: $displayName,
-                  description: $description,
-                  authorizationPolicy: {
-                    authorizationScheme: "Default"
-                  },
-                  trafficRoutingPolicy: {
-                    protocol: "FixedRatio",
-                    rules: [
-                      {
-                        ruleId: "default",
-                        description: "Default rule routing all traffic to the first deployment",
-                        deploymentId: $deploymentId,
-                        trafficPercentage: 100
-                      }
-                    ]
+          echo "=== Linking deployment for ${APP_NAME} ==="
+
+          APP_LINK_BODY=$(jq -n \
+            --arg displayName "$AGENT_NAME" \
+            --arg description "Published agent application for ${AGENT_NAME}" \
+            --arg agentId "$AGENT_ID" \
+            --arg agentName "$AGENT_NAME" \
+            --arg deploymentId "$DEPLOYMENT_ID" \
+            '{
+              properties: {
+                agents: [
+                  {
+                    agentId: $agentId,
+                    agentName: $agentName
                   }
+                ],
+                displayName: $displayName,
+                description: $description,
+                authorizationPolicy: {
+                  authorizationScheme: "Default"
+                },
+                trafficRoutingPolicy: {
+                  protocol: "FixedRatio",
+                  rules: [
+                    {
+                      ruleId: "default",
+                      description: "Default rule",
+                      deploymentId: $deploymentId,
+                      trafficPercentage: 100
+                    }
+                  ]
                 }
-              }')
+              }
+            }')
 
-            APP_LINK_RESPONSE=$(
-              curl --fail-with-body --silent --show-error \
-                -X PUT \
-                "$APP_URL" \
-                -H "Authorization: Bearer ${ARM_TOKEN}" \
-                -H "Content-Type: application/json" \
-                -d "$APP_LINK_BODY"
-            )
+          APP_LINK_RESPONSE=$(
+            curl --fail-with-body --silent --show-error \
+              -X PUT \
+              "$APP_URL" \
+              -H "Authorization: Bearer ${ARM_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "$APP_LINK_BODY"
+          )
 
-            echo "Application link response: $APP_LINK_RESPONSE"
-          done < <(jq -c '.[]' <<< "$AGENTS")
+          echo "Application link response: $APP_LINK_RESPONSE"
