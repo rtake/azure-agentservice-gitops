@@ -46,6 +46,8 @@ jobs:
           echo "arm_token=$ARM_TOKEN" >> "$GITHUB_OUTPUT"
 
       - name: List model
+        env:
+          ARM_TOKEN: ${{ steps.token.outputs.arm_token }}
         run: |
           URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AIFOUNDRY_ACCOUNT_NAME}/deployments?api-version=${API_VERSION}"
           curl -X GET "$URL" \
