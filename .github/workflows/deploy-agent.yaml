@@ -26,12 +26,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Azure Login (OIDC) and get token
+      - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get token
         id: token
         run: |
           AIFOUNDRY_TOKEN=$(az account get-access-token \
