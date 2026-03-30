@@ -204,9 +204,11 @@ jobs:
                     version: "1.0"
                   }
                 ],
-                state: "Starting"
+                state: "Running"
               }
             }')
+
+          echo "DEPLOY_BODY $DEPLOY_BODY"
 
           DEPLOY_RESPONSE=$(
             curl --fail-with-body --silent --show-error \
