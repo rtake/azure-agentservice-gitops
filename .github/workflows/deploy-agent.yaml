@@ -167,6 +167,50 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Update applications to refer the uploaded agents
+        if: steps.changes.outputs.files != ''
+        env:
+          ARM_TOKEN: ${{ steps.arm_token.outputs.token }}
+          AGENTS: ${{ steps.agents.outputs.agents }}
+        run: |
+          set -euo pipefail
+
+          AGENT_NAME=$(jq -r '.agentName' <<< "$agent")
+          AGENT_ID=$(jq -r '.agentId' <<< "$agent")
+          APP_NAME=$(jq -r '.appName' <<< "$agent")
+          APP_URL="https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.CognitiveServices/accounts/${AIFOUNDRY_ACCOUNT_NAME}/projects/${PROJECT_NAME}/applications/${APP_NAME}?api-version=${API_VERSION}"
+
+          echo "=== Creating or updating application ${APP_NAME} ==="
+
+          APP_BODY=$(jq -n \
+            --arg displayName "$AGENT_NAME" \
+            --arg description "Published agent application for ${AGENT_NAME}" \
+            --arg agentId "$AGENT_ID" \
+            --arg agentName "$AGENT_NAME" \
+            '{
+              properties: {
+                agents: [
+                  {
+                    agentId: $agentId,
+                    agentName: $agentName
+                  }
+                ],
+                displayName: $displayName,
+                description: $description
+              }
+            }')
+
+          APP_RESPONSE=$(
+            curl --fail-with-body --silent --show-error \
+              -X PUT \
+              "$APP_URL" \
+              -H "Authorization: Bearer ${ARM_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "$APP_BODY"
+          )
+
+          echo "Application response: $APP_RESPONSE"
+
       - name: Create or update deployment for the uploaded agent
         id: deployment
         if: steps.agent.outputs.agent != ''
@@ -186,8 +230,6 @@ jobs:
           echo "DEPLOY_URL $DEPLOY_URL"
 
           echo "=== Creating or updating deployment ${APP_NAME}/${DEPLOYMENT_NAME} ==="
-
-          sleep 60
 
           DEPLOY_BODY=$(jq -n \
             --arg agentName "$AGENT_NAME" \
