@@ -40,6 +40,7 @@ mainブランチにマージされたエージェントは、本番環境のAI F
 9. Pull Requestをレビュー・マージする
 10. mainへのマージをトリガーとしてGitHub Actionsが起動し、OIDCによる認証でAzureにアクセスする
 11. 本番環境のAI Foundryに対してエージェント発行APIを実行する
+12. 本番環境で不足しているモデルデプロイがあればBicepで作成し、その後アプリケーション/agent deploymentをBicepで反映する
 
 ## コンポーネント
 
@@ -83,7 +84,13 @@ mainへのPull Requestのマージをトリガーとして起動します。
 (処理概要)
 
 1. AI Foundryのアクセストークンを取得
-2. 本番環境のAI Foundryにエージェント発行APIを実行
+2. 変更されたエージェント定義をもとに本番環境のAI Foundryにエージェント発行APIを実行
+3. 本番環境に必要なモデルデプロイが存在するか確認し、不足分のみ `infra/model-deployment.bicep` で作成
+4. `infra/agent-publish.bicep` でアプリケーションとagent deploymentを反映
+
+モデルデプロイの既定値は [azure/infra/model-config.json](/azure/infra/model-config.json) で管理します。
+`models` にモデル名ごとの上書きを定義しない場合は、エージェント定義の `model` をそのままデプロイ名/モデル名として扱います。
+Azure の application / agent deployment リソース名には使用可能な文字制約があるため、デプロイ時にはエージェント名やバージョンから Azure 向けの安全な名前を自動生成します。表示名とエージェント参照には元のエージェント名を維持します。
 
 ## デプロイ手順
 
@@ -114,9 +121,40 @@ az deployment group create \
 
 ```
 az deployment group what-if \
-  -g <ResourceGroupName> \
+  --resource-group <ResourceGroupName> \
+  --template-file infra/main.bicep \
   -p infra/param.bicepparam
 ```
+
+個別テンプレートのDry-run例:
+
+```
+# モデルデプロイ
+az deployment group what-if \
+  --resource-group <ResourceGroupName> \
+  --template-file infra/model-deployment.bicep \
+  --parameters accountName=<FoundryAccountName> deploymentName=<ModelDeploymentName> modelName=<ModelName>
+
+# アプリケーション/agent deployment
+az deployment group what-if \
+  --resource-group <ResourceGroupName> \
+  --template-file infra/agent-publish.bicep \
+  --parameters \
+    accountName=<FoundryAccountName> \
+    projectName=prod \
+    applicationName=<SafeApplicationName> \
+    agentName=<AgentName> \
+    agentId=<AgentId> \
+    agentVersion=<AgentVersion> \
+    deploymentName=<AgentDeploymentName>
+```
+
+`main.bicep` は以下のモジュールに分割しています。
+
+- `infra/modules/ai-foundry.bicep`
+- `infra/modules/storage-queue.bicep`
+- `infra/modules/function-app.bicep`
+- `infra/modules/monitoring.bicep`
 
 ### Azure Functionsのデプロイ
 
@@ -131,11 +169,11 @@ func azure functionapp publish <FunctionAppName> # デプロイ
 
 Azure Functionsの環境変数に以下の値を設定します。
 
-| 変数         | 説明                                                                                                            |
-| ------------ | --------------------------------------------------------------------------------------------------------------- |
-| GITHUB_OWNER | GitHubリポジトリのユーザー名                                                                                    |
-| GITHUB_REPO  | GitHubのリポジトリ名                                                                                            |
-| GITHUB_TOKEN | GitHub Actions用のシークレット。GitHubのアカウントページのDeveloper settings -> Fine-grained tokensを作成します |
+| 変数         | 説明                                                                                                                    |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| GITHUB_OWNER | GitHubリポジトリのユーザー名                                                                                            |
+| GITHUB_REPO  | GitHubのリポジトリ名                                                                                                    |
+| GITHUB_TOKEN | GitHub Actions用のシークレット。GitHubのアカウントページのDeveloper settings -> Fine-grained tokensを作成して設定します |
 
 以下の変数は `az deployment create` コマンドを実行した際に自動で設定されます。
 
@@ -144,8 +182,9 @@ Azure Functionsの環境変数に以下の値を設定します。
 | QUEUE_CONNECTION_STRING | Queue storageの接続文字列                                                                         |
 | QUEUE_NAME              | 2つのAzure Functionsを接続するために使用するキューの名前 (このリポジトリでは `queue-agentdeploy`) |
 
-`upload-agent-from-queue` でAI Foundryにアクセスするためのロールが必要です。
-デプロイした Azure Functionsに、開発用AI Foundryに対する `Cognitive Serviceユーザー` ロールを割り当ててください。
+~~`upload-agent-from-queue` でAI Foundryにアクセスするためのロールが必要です。
+デプロイした Azure Functionsに、開発用AI Foundryに対する `Cognitive Serviceユーザー` ロールを割り当ててください。~~\
+`az deployment` で自動設定できるように修正中
 
 ### アラート設定
 
@@ -164,6 +203,8 @@ Azure Functionsの環境変数に以下の値を設定します。
 [OpenID Connect で Azure ログイン アクションを使用](https://learn.microsoft.com/ja-jp/azure/developer/github/connect-from-azure?tabs=azure-portal%2Clinux#use-the-azure-login-action-with-openid-connect)
 
 作成したサービスプリンシパル(Azure管理画面上ではエンタープライズアプリケーションとして扱われます)に、本番用AI Foundryに対する `Azure AI User` ロールと `Cognitive Services 共同作成者` を割り当ててください。
+また、リソースグループに対する `共同作成者` ロールも割り当ててください。
+
 ![](/docs/role-assignment.png)
 
 #### リポジトリのシークレットと変数の設定
@@ -176,25 +217,40 @@ Azure Functionsの環境変数に以下の値を設定します。
 | AZURE_TENANT_ID       | GitHub Actions用のエンタープライズアプリケーションが含まれているテナントのID |
 | AZURE_CLIENT_ID       | GitHub Actions用のエンタープライズアプリケーションのID                       |
 
-リポジトリの構成変数に、mainへのマージ時にエージェントをデプロイする(=本番用の)AI Foundryのアカウント名を設定してください。
+リポジトリの構成変数に、mainへのマージ時にエージェントをデプロイする(=本番用の)AI Foundryのアカウント名とリソースグループ名を設定してください。
 
 | 変数名                 | 概要                     |
 | ---------------------- | ------------------------ |
 | AIFOUNDRY_ACCOUNT_NAME | AI Foundryのアカウント名 |
 | RESOURCE_GROUP_NAME    | リソースグループ名       |
 
+![](/docs/githubactions-vars.png)
+
 ## テスト
 
-`detect-agent-publish` を起動することでパイプラインの挙動をテストすることができます。
+### アラート発報からPR作成までのテスト
 
-.envにURLとキーを記載し、[trigger.sh](/azure/functions/test-scripts/upload-agent-to-github/trigger.sh)を実行してください。
+.envに `detect-agent-publish` のURLとキーを記載し、[trigger.sh](/azure/functions/test-scripts/upload-agent-to-github/trigger.sh)を実行すると、アラートが発報し、PR作成までの処理が起動します。
+GitHub上でワークフローが起動し、PR作成が確認できたら成功です。
 
 ```
 cd azure/functions/test-scripts/upload-agent-to-github
 bash trigger.sh
 ```
 
-GitHub上でワークフローが起動し、PR作成が確認できたら成功です。
+### E2Eテスト
+
+開発用のAI Foundryのプロジェクトでエージェントを新規作成・発行すると、アラート発報・Azure Functions起動・GitHub Actions起動を経てPRが作成されます。
+
+![](/docs/aifoundry-dev-publish.png)
+
+![](/docs/auto-generated-pr.png)
+
+PRがマージされると、GitHub Actionsのワークフローが起動し、本番用のAI Foundryの `prod` プロジェクトに同名のエージェントが作成・発行されます。
+
+![](/docs/prod-workflow.png)
+
+![](/docs/prod-agent.png)
 
 ## 設計上のポイント
 
@@ -206,14 +262,16 @@ GitHub上でワークフローが起動し、PR作成が確認できたら成功
 
 ## 今後の改善点
 
-- バグ修正
-  - https://github.com/rtake/azure-agentservice-gitops/actions/runs/23555004171/job/68579222290
-- JSON削除時のバグ
-  - https://github.com/rtake/azure-agentservice-gitops/actions/runs/23555497605/job/68581023102
-- Bicepでモデルをデプロイできるようにする
-  - 本番環境でモデルがデプロイされていない場合にはデプロイする
-- Bicep分割
+### バグ
+
+- エージェントJSONを削除すると変更検知でエラーが発生する
+  - https://github.com/rtake/azure-agentservice-gitops/actions/runs/23637637137/job/68850332115
+- 本番環境でのエージェント発行ができない
+  - ここではうまくできている (https://github.com/rtake/azure-agentservice-gitops/actions/runs/23588184100/job/68686435819)
+
+### 改良
+
+- GitHub Actions用のサービスプリンシパルをBicepでデプロイできるようにする
 - Azure Functionsの環境変数の値をKey Vault等から安全に参照できるようにする(現在の構成ではデプロイのたびに更新が必要になってしまう)
-- Bicepにサービスプリンシパルを追加する
 - Parse Log Functionの呼び出し元をSecure webhookに限定し、アクショングループからのみ呼び出せるようにする ([セキュア Webhook アクション グループを作成する](https://learn.microsoft.com/ja-jp/azure/azure-monitor/alerts/itsm-connector-secure-webhook-connections-azure-configuration#create-a-secure-webhook-action-group))
 - ネットワーク閉域化

@@ -1,0 +1,16 @@
+{
+  "defaults": {
+    "modelFormat": "OpenAI",
+    "modelVersion": "",
+    "modelPublisher": "",
+    "skuName": "GlobalStandard",
+    "skuCapacity": 1,
+    "deploymentState": "Running",
+    "serviceTier": "Default",
+    "versionUpgradeOption": "OnceNewDefaultVersionAvailable"
+  },
+  "models": {
+    "gpt-4.1": {},
+    "gpt-4.1-nano": {}
+  }
+}

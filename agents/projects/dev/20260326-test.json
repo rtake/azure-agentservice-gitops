@@ -1,0 +1,10 @@
+{
+  "kind": "prompt",
+  "model": "gpt-4o",
+  "instructions": "テスト 20260326",
+  "tools": [
+    {
+      "type": "web_search"
+    }
+  ]
+}
