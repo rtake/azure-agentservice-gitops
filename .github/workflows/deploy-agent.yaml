@@ -120,6 +120,28 @@ jobs:
                   definition: $def[0]
                 }')
 
+              # エージェントのバージョンを作成
+              # https://learn.microsoft.com/ja-jp/rest/api/aifoundry/aiproject?view=rest-aifoundry-accountmanagement-2025-10-01-preview#agents---create-agent-version
+
+              CREATE_VERSION_URL="${BASE_URL}/api/projects/${PROJECT_NAME}/agents/${AGENT_NAME}/versions?api-version=v1"
+              CREATE_VERSION_BODY=$(jq -n \
+                --slurpfile def "$f" \
+                '{
+                  definition: $def[0]
+                }')
+              CREATE_VERSION_RESPONSE=$(
+                curl --fail-with-body --silent --show-error \
+                -X POST \
+                "$CREATE_VERSION_URL" \
+                -H "Authorization: Bearer ${FOUNDRY_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d "$CREATE_VERSION_BODY"
+              )
+
+              echo "Create version response: $CREATE_VERSION_RESPONSE"
+
+              AGENT_RESPONSE=CREATE_VERSION_RESPONSE
+
               # エージェントがすでに存在する場合には処理不要
               # AGENT_RESPONSE=$(
               #   curl --fail-with-body --silent --show-error \
