@@ -48,6 +48,7 @@ __queuestorage__
 __azurite_db*__.json
 
 *.bicepparam
+!example.bicepparam
 
 .azure
 .DS_store
