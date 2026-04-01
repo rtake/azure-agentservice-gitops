@@ -37,7 +37,7 @@ resource webhookApp 'Microsoft.Graph/applications@v1.0' = {
   ]
   owners: {
     relationships: [
-      '${azureMonitorActionGroupsSp.id}'
+      deployer().objectId
     ]
   }
 }
