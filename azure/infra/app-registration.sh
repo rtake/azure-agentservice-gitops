@@ -10,6 +10,64 @@ APP_ID=$(az ad app create \
 
 echo "appId: $APP_ID"
 
+## Add owner
+APP_OBJECT_ID=$(az ad app show --id "$APP_ID" --query id -o tsv)
+echo "app object id: $APP_OBJECT_ID"
+
+### Prefer signed-in user if available; otherwise fall back to the current service principal.
+OWNER_OBJECT_ID=""
+if OWNER_OBJECT_ID=$(az ad signed-in-user show --query id -o tsv 2>/dev/null); then
+  echo "owner object id (signed-in user): $OWNER_OBJECT_ID"
+else
+  if [ -n "${AZURE_CLIENT_ID:-}" ]; then
+    OWNER_OBJECT_ID=$(az ad sp show --id "$AZURE_CLIENT_ID" --query id -o tsv)
+    echo "owner object id (service principal): $OWNER_OBJECT_ID"
+  else
+    echo "Could not determine owner object id." >&2
+    exit 1
+  fi
+fi
+
+### Avoid duplicate owner assignment.
+EXISTING_OWNER_COUNT=$(az rest --method GET \
+  --uri "https://graph.microsoft.com/v1.0/applications/$APP_OBJECT_ID/owners/\$ref" \
+  --query "value[?id=='$OWNER_OBJECT_ID'] | length(@)" -o tsv 2>/dev/null)
+echo "existing owner count: $EXISTING_OWNER_COUNT"
+
+if [ "$EXISTING_OWNER_COUNT" -eq 0 ]; then
+  az rest --method POST \
+    --uri "https://graph.microsoft.com/v1.0/applications/$APP_OBJECT_ID/owners/\$ref" \
+    --headers "Content-Type=application/json" \
+    --body "{
+      \"@odata.id\": \"https://graph.microsoft.com/v1.0/directoryObjects/$OWNER_OBJECT_ID\"
+    }"
+  echo "Owner added."
+else
+  echo "Owner already assigned. Skipping."
+fi
+
+## API exposure
+APP_JSON=$(az rest --method GET \
+  --uri "https://graph.microsoft.com/v1.0/applications(appId='$APP_ID')" \
+  -o json)
+
+UPDATED_BODY=$(printf '%s' "$APP_JSON" | jq -c \
+  --arg identifier_uri "api://$APP_ID" '
+{
+  api: (
+    .api
+    | .requestedAccessTokenVersion = 2
+  ),
+  identifierUris: [$identifier_uri]
+}')
+
+az rest --method PATCH \
+  --uri "https://graph.microsoft.com/v1.0/applications(appId='$APP_ID')" \
+  --headers "Content-Type=application/json" \
+  --body "$UPDATED_BODY"
+
+echo "API identifier URI set to api://$APP_ID"
+
 ## Ensure service principal exists for the app
 if ! az ad sp show --id "$APP_ID" >/dev/null 2>&1; then
   az ad sp create --id "$APP_ID" >/dev/null
