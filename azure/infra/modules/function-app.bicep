@@ -8,6 +8,8 @@ param githubRepo string
 param githubToken string
 param storageConnectionString string
 param queueName string
+param aadClientId string
+param tenantId string
 
 var planName = 'plan-${resourceToken}'
 var functionName = 'func-${resourceToken}'
@@ -63,6 +65,36 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
       GITHUB_TOKEN: githubToken
       QUEUE_CONNECTION_STRING: storageConnectionString
       QUEUE_NAME: queueName
+    }
+  }
+}
+
+resource auth 'Microsoft.Web/sites/config@2022-09-01' = {
+  parent: functionApp
+  name: 'authsettingsV2'
+  properties: {
+    globalValidation: {
+      requireAuthentication: true
+      unauthenticatedClientAction: 'RedirectToLoginPage'
+    }
+    identityProviders: {
+      azureActiveDirectory: {
+        enabled: true
+        registration: {
+          clientId: aadClientId
+          openIdIssuer: 'https://sts.windows.net/${tenantId}/'
+        }
+        validation: {
+          allowedAudiences: [
+            'api://${aadClientId}'
+          ]
+        }
+      }
+    }
+    login: {
+      tokenStore: {
+        enabled: true
+      }
     }
   }
 }
