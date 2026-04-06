@@ -8,7 +8,8 @@ param githubRepo string
 param githubToken string
 param storageConnectionString string
 param queueName string
-param aadClientId string
+param webhookAppClientId string
+param webhookAppAudience string
 param tenantId string
 
 var planName = 'plan-${resourceToken}'
@@ -81,12 +82,12 @@ resource auth 'Microsoft.Web/sites/config@2022-09-01' = {
       azureActiveDirectory: {
         enabled: true
         registration: {
-          clientId: aadClientId
+          clientId: webhookAppClientId
           openIdIssuer: 'https://sts.windows.net/${tenantId}/'
         }
         validation: {
           allowedAudiences: [
-            'api://${aadClientId}'
+            webhookAppAudience
           ]
         }
       }
