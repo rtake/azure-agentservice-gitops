@@ -1,3 +1,5 @@
+extension microsoftGraphV1
+
 param location string = resourceGroup().location
 
 @description('Azure AI Foundry account region')
@@ -14,11 +16,8 @@ param runtime string = 'node'
 @description('Runtime version')
 param runtimeVersion string = '20'
 
-@description('AAD Client ID for Azure Functions authentication. Inject via CI, do NOT put in source.')
-param aadClientId string = '00000000-0000-0000-0000-000000000000' // dummy
-
-@description('AAD Object ID for Azure Functions authentication. Inject via CI, do NOT put in source.')
-param aadObjectId string = '00000000-0000-0000-0000-000000000000' // dummy
+@description('Optional owner object ID for the secure webhook app registration.')
+param webhookAppOwnerObjectId string = ''
 
 @description('GitHub owner (non-secret, optional)')
 param githubOwner string = ''
@@ -32,6 +31,10 @@ param githubToken string = ''
 
 var resourceToken = take(toLower(uniqueString(resourceGroup().id, location)), 6)
 var tenantId = tenant().tenantId
+var effectiveWebhookAppOwnerObjectId = empty(webhookAppOwnerObjectId) ? deployer().objectId : webhookAppOwnerObjectId
+var webhookAppUniqueName = 'github-workflow-function-app-${resourceToken}'
+var webhookAppDisplayName = 'github-workflow-function-app-${resourceToken}'
+var webhookAppAudience = 'api://${webhookAppUniqueName}'
 
 var devAiFoundryAccountName = 'aif-${resourceToken}-dev'
 var prodAiFoundryAccountName = 'aif-${resourceToken}-prod'
@@ -66,6 +69,16 @@ module storageQueue './modules/storage-queue.bicep' = {
   }
 }
 
+module webhookAppRegistration './modules/webhook-app-registration.bicep' = {
+  name: 'webhookAppRegistration'
+  params: {
+    applicationUniqueName: webhookAppUniqueName
+    applicationDisplayName: webhookAppDisplayName
+    audience: webhookAppAudience
+    ownerObjectId: effectiveWebhookAppOwnerObjectId
+  }
+}
+
 module functionApp './modules/function-app.bicep' = {
   name: 'functionApp'
   params: {
@@ -79,7 +92,8 @@ module functionApp './modules/function-app.bicep' = {
     storageConnectionString: storageQueue.outputs.storageConnectionString
     queueName: storageQueue.outputs.queueName
     tenantId: tenantId
-    aadClientId: aadClientId
+    webhookAppClientId: webhookAppRegistration.outputs.clientId
+    webhookAppAudience: webhookAppRegistration.outputs.audience
   }
 }
 
@@ -90,7 +104,7 @@ module monitoring './modules/monitoring.bicep' = {
     monitorScopeId: aiFoundry.outputs.devAccountId
     tenantId: tenantId
     serviceUri: 'https://${functionApp.outputs.functionName}.azurewebsites.net/api/detect-agent-publish'
-    webhookAppObjectId: aadObjectId
+    webhookAppObjectId: webhookAppRegistration.outputs.objectId
   }
 }
 
@@ -157,3 +171,5 @@ resource githubworkflowServicePrincipalContributorAssignment 'Microsoft.Authoriz
 output devAiFoundryAccountName string = aiFoundry.outputs.devAccountName
 output prodAiFoundryAccountName string = aiFoundry.outputs.prodAccountName
 output functionAppName string = functionApp.outputs.functionName
+output webhookAppClientId string = webhookAppRegistration.outputs.clientId
+output webhookAppObjectId string = webhookAppRegistration.outputs.objectId
