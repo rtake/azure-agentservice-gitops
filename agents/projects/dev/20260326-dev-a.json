@@ -1,7 +1,7 @@
 {
   "kind": "prompt",
   "model": "gpt-4o",
-  "instructions": "",
+  "instructions": "20260718 更新",
   "tools": [
     {
       "type": "web_search"
