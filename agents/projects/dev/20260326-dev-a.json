@@ -1,7 +1,7 @@
 {
   "kind": "prompt",
   "model": "gpt-4o",
-  "instructions": "20260718 更新",
+  "instructions": "20260718 更新\nプロンプトを追加しました",
   "tools": [
     {
       "type": "web_search"
